@@ -33,6 +33,7 @@ export default function SupplyClosureTracker() {
         reasonOptions={ALL_SUPPLY_REASONS}
         reloadSignal={reloadSignal}
         onReload={sync}
+        showReasonCol
       />
     </div>
   );

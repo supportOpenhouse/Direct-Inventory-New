@@ -4,6 +4,7 @@ import Layout from './components/Layout.jsx';
 import Login from './pages/Login.jsx';
 import Home from './pages/Home.jsx';
 import Leads from './pages/Leads.jsx';
+import QualifiedLeads from './pages/QualifiedLeads.jsx';
 import FollowUps from './pages/FollowUps.jsx';
 import VisitScheduled from './pages/VisitScheduled.jsx';
 import SupplyClosureTracker from './pages/SupplyClosureTracker.jsx';
@@ -32,6 +33,7 @@ export default function App() {
       <Route element={<RequireAuth><Layout /></RequireAuth>}>
         <Route path="/" element={<Home />} />
         <Route path="/leads" element={<Leads />} />
+        <Route path="/qualified-leads" element={<QualifiedLeads />} />
         <Route path="/follow-ups" element={<FollowUps />} />
         <Route path="/visit-scheduled" element={<VisitScheduled />} />
         <Route path="/pipeline" element={<SupplyClosureTracker />} />

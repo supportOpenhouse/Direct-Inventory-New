@@ -3,11 +3,12 @@ import { api } from '../api/client.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import ExpandPanel from '../components/ExpandPanel.jsx';
 import {
-  CITIES, displayCity, formatPrice, isCreatedToday, UNQUALIFIED_REJECT_REASONS, starColor, variation,
+  CITIES, displayCity, isCreatedToday, rejectReasonsForStage, starColor,
 } from '../utils/format.js';
 import { IconExternal, IconSearch } from '../components/icons.jsx';
 
-const EXPAND_SECTIONS = ['property', 'seller', 'notes'];
+// Notes intentionally dropped from the Leads expand panel.
+const EXPAND_SECTIONS = ['property', 'seller'];
 
 // ── star cell (priority toggle) ──────────────────────────────────────────
 function StarCell({ item, canSet, onUpdated }) {
@@ -31,13 +32,35 @@ function StarCell({ item, canSet, onUpdated }) {
   );
 }
 
-// ── left: unacted leads ──────────────────────────────────────────────────
-function UnactedTable({ items, loading, role, onUpdated, onQualify, onReject }) {
+// ── generic action table — used for both the Lead and Active Lead panes ────
+// primaryMode 'direct' fires onPrimary(item) immediately; 'phone' opens an
+// inline [number] [save] [cancel] editor over the action cell and fires
+// onPrimary(item, phone) on save (used by Active → Qualify, which captures the
+// seller's number first).
+function ActionTable({ items, loading, role, onUpdated, primaryLabel, primaryMode = 'direct', onPrimary, onReject, reasons, emptyText, isNew = () => false }) {
   const [openId, setOpenId] = useState(null);
   const [rejectFor, setRejectFor] = useState(null);
+  const [phoneFor, setPhoneFor] = useState(null);
+  const [phoneVal, setPhoneVal] = useState('');
   const canSet = ['admin', 'manager', 'rm'].includes(role);
   const cols = 4;
   const link = (it) => (it.listing_link && !/^internal:\/\//.test(it.listing_link) ? it.listing_link : null);
+  const phoneMode = primaryMode === 'phone';
+
+  function startPrimary(it) {
+    if (!phoneMode) { onPrimary(it); return; }
+    setRejectFor(null);
+    if (phoneFor === it.oh_id) { setPhoneFor(null); return; }
+    // Prefill the existing number, normalised to the app's 10-digit convention.
+    setPhoneVal((it.seller_phone || '').replace(/\D/g, '').slice(0, 10));
+    setPhoneFor(it.oh_id);
+  }
+  function savePhone(it) {
+    const v = phoneVal.trim();
+    if (v.length !== 10) return; // require a complete 10-digit number to qualify
+    setPhoneFor(null);
+    onPrimary(it, v);
+  }
 
   return (
     <div className="inv-table-wrap">
@@ -54,7 +77,7 @@ function UnactedTable({ items, loading, role, onUpdated, onQualify, onReject }) 
           {loading && Array.from({ length: 6 }).map((_, r) => (
             <tr className="inv-row" key={`s${r}`}>{Array.from({ length: cols }).map((__, c) => <td key={c}><span className="inv-skel" /></td>)}</tr>
           ))}
-          {!loading && items.length === 0 && <tr><td className="inv-empty" colSpan={cols}>No unacted leads.</td></tr>}
+          {!loading && items.length === 0 && <tr><td className="inv-empty" colSpan={cols}>{emptyText}</td></tr>}
           {!loading && items.map((it) => {
             const isOpen = openId === it.oh_id;
             return (
@@ -63,7 +86,7 @@ function UnactedTable({ items, loading, role, onUpdated, onQualify, onReject }) 
                   <StarCell item={it} canSet={canSet} onUpdated={onUpdated} />
                   <td className="inv-td-society">
                     {it.society || '—'}
-                    {isCreatedToday(it.created_at) && <img className="new-badge-img" src="/new.png" alt="NEW" />}
+                    {isNew(it) && <img className="new-badge-img" src="/new.png" alt="NEW" />}
                     <div className="inv-td-muted" style={{ fontWeight: 400, fontSize: 12 }}>{displayCity(it.city)} · {it.oh_id}</div>
                   </td>
                   <td>
@@ -73,15 +96,30 @@ function UnactedTable({ items, loading, role, onUpdated, onQualify, onReject }) 
                   </td>
                   <td style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
                     <div className="lead-actions">
-                      <button className="lead-act-q" onClick={() => onQualify(it)}>Qualified</button>
-                      <button className="lead-act-r" onClick={() => setRejectFor(rejectFor === it.oh_id ? null : it.oh_id)}>Reject ▾</button>
+                      <button className="lead-act-q" onClick={() => startPrimary(it)}>{primaryLabel}</button>
+                      <button className="lead-act-r" onClick={() => { setPhoneFor(null); setRejectFor(rejectFor === it.oh_id ? null : it.oh_id); }}>Reject ▾</button>
                     </div>
                     {rejectFor === it.oh_id && (
-                      <div className="reject-menu" onMouseLeave={() => setRejectFor(null)}>
+                      <div className={`reject-menu ${phoneMode ? 'reject-menu-sm' : ''}`} onMouseLeave={() => setRejectFor(null)}>
                         <div className="rm-title">Reject reason</div>
-                        {UNQUALIFIED_REJECT_REASONS.map((r) => (
+                        {reasons.map((r) => (
                           <button key={r.value} onClick={() => { setRejectFor(null); onReject(it, r.value); }}>{r.label}</button>
                         ))}
+                      </div>
+                    )}
+                    {phoneMode && phoneFor === it.oh_id && (
+                      <div className="phone-entry">
+                        <input
+                          autoFocus type="tel" inputMode="numeric" maxLength={10}
+                          value={phoneVal}
+                          onChange={(e) => setPhoneVal(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') { e.preventDefault(); savePhone(it); }
+                            else if (e.key === 'Escape') { e.preventDefault(); setPhoneFor(null); }
+                          }}
+                          placeholder="10-digit no." />
+                        <button className="pe-save" disabled={phoneVal.trim().length !== 10} onClick={() => savePhone(it)}>Save</button>
+                        <button className="pe-cancel" onClick={() => setPhoneFor(null)}>Cancel</button>
                       </div>
                     )}
                   </td>
@@ -100,75 +138,18 @@ function UnactedTable({ items, loading, role, onUpdated, onQualify, onReject }) 
   );
 }
 
-// ── right: qualified leads ────────────────────────────────────────────────
-function QualifiedTable({ items, loading, role, onUpdated }) {
-  const [openId, setOpenId] = useState(null);
-  const canPost = ['admin', 'manager', 'rm'].includes(role);
-  const cols = 8;
-  return (
-    <div className="inv-table-wrap">
-      <table className="inv-table">
-        <thead>
-          <tr>
-            <th className="inv-th inv-th-star" />
-            <th className="inv-th">Society</th>
-            <th className="inv-th">BHK</th>
-            <th className="inv-th">Floor</th>
-            <th className="inv-th">Area</th>
-            <th className="inv-th inv-th-right">Asking</th>
-            <th className="inv-th inv-th-right">OH Price</th>
-            <th className="inv-th inv-th-right">Variation</th>
-          </tr>
-        </thead>
-        <tbody>
-          {loading && Array.from({ length: 6 }).map((_, r) => (
-            <tr className="inv-row" key={`s${r}`}>{Array.from({ length: cols }).map((__, c) => <td key={c}><span className="inv-skel" /></td>)}</tr>
-          ))}
-          {!loading && items.length === 0 && <tr><td className="inv-empty" colSpan={cols}>No qualified leads yet.</td></tr>}
-          {!loading && items.map((it) => {
-            const isOpen = openId === it.oh_id;
-            const v = variation(it.price, it.oh_price);
-            return (
-              <Fragment key={it.oh_id}>
-                <tr className={`inv-row ${isOpen ? 'inv-row-open' : ''}`} onClick={() => setOpenId(isOpen ? null : it.oh_id)}>
-                  <StarCell item={it} canSet={canPost} onUpdated={onUpdated} />
-                  <td className="inv-td-society">{it.society || '—'}
-                    {it.qualified_today && <img className="new-badge-img" src="/new.png" alt="NEW" />}
-                    <div className="inv-td-muted" style={{ fontWeight: 400, fontSize: 12 }}>{displayCity(it.city)} · {it.oh_id}</div></td>
-                  <td>{it.bedrooms != null ? `${it.bedrooms} BHK` : '—'}</td>
-                  <td>{it.floor || '—'}</td>
-                  <td>{it.area_sqft != null ? `${it.area_sqft} sqft` : '—'}</td>
-                  <td className="inv-td-num val-orange">{formatPrice(it.price)}</td>
-                  <td className={`inv-td-num ${it.oh_price ? 'val-green' : 'muted'}`}>{it.oh_price ? formatPrice(it.oh_price) : '—'}</td>
-                  <td className={`inv-td-num ${v ? `val-var-${v.sign}` : 'muted'}`}>{v ? v.label : '—'}</td>
-                </tr>
-                {isOpen && (
-                  <tr className="expand-row"><td colSpan={cols}>
-                    <ExpandPanel item={it} role={role} onUpdated={onUpdated} canPost={canPost} sections={EXPAND_SECTIONS} />
-                  </td></tr>
-                )}
-              </Fragment>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 export default function Leads() {
   const { user } = useAuth();
   const [qInput, setQInput] = useState('');
   const [qApplied, setQApplied] = useState('');
   const [city, setCity] = useState('');
-  const [unacted, setUnacted] = useState([]);
-  const [qualified, setQualified] = useState([]);
+  const [leads, setLeads] = useState([]);
+  const [active, setActive] = useState([]);
   const [loadingL, setLoadingL] = useState(true);
   const [loadingR, setLoadingR] = useState(true);
 
-  // which pane(s) to show: 'unqualified' | 'both' | 'qualified'
+  // which pane(s) to show: 'lead' | 'both' | 'active'
   const [paneView, setPaneView] = useState('both');
-  // resizable split (left pane width %, clamped 25–75)
   const [leftPct, setLeftPct] = useState(50);
   const containerRef = useRef(null);
   const draggingRef = useRef(false);
@@ -182,27 +163,26 @@ export default function Leads() {
     return p;
   }
 
-  const loadUnacted = useCallback(async () => {
+  const loadLeads = useCallback(async () => {
     setLoadingL(true);
-    try { const r = await api.get(`/api/inventory?${baseParams('unqualified')}`); setUnacted(r.items || []); }
+    try { const r = await api.get(`/api/inventory?${baseParams('lead')}`); setLeads(r.items || []); }
     finally { setLoadingL(false); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qApplied, city]);
 
-  const loadQualified = useCallback(async () => {
+  const loadActive = useCallback(async () => {
     setLoadingR(true);
     try {
-      const p = baseParams('qualified');
-      p.set('annotate_qualified_today', '1'); // stamp rows qualified today → NEW badge
+      const p = baseParams('active');
+      p.set('annotate_active_today', '1'); // stamps active_today → "NEW" badge
       const r = await api.get(`/api/inventory?${p}`);
-      setQualified(r.items || []);
+      setActive(r.items || []);
     } finally { setLoadingR(false); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qApplied, city]);
 
-  useEffect(() => { loadUnacted(); loadQualified(); }, [loadUnacted, loadQualified]);
+  useEffect(() => { loadLeads(); loadActive(); }, [loadLeads, loadActive]);
 
-  // divider drag
   const onDrag = useCallback((e) => {
     if (!draggingRef.current || !containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
@@ -220,18 +200,32 @@ export default function Leads() {
     return (updated) => setter((prev) => prev.map((it) => (it.oh_id === updated.oh_id ? { ...it, ...updated } : it)));
   }
 
-  async function qualify(item) {
-    setUnacted((prev) => prev.filter((it) => it.oh_id !== item.oh_id));
-    const moved = { ...item, stage: 'qualified', qualified_today: true };
-    setQualified((prev) => [moved, ...prev]);
-    try { await api.patch(`/api/inventory/${item.oh_id}`, { stage: 'qualified' }); }
-    catch { loadUnacted(); loadQualified(); }
+  // lead → active. Activating today = "new" in the Active pane, so stamp
+  // active_today optimistically for an immediate NEW badge.
+  async function activate(item) {
+    setLeads((prev) => prev.filter((it) => it.oh_id !== item.oh_id));
+    setActive((prev) => [{ ...item, stage: 'active', active_today: true }, ...prev]);
+    try { await api.patch(`/api/inventory/${item.oh_id}`, { stage: 'active' }); }
+    catch { loadLeads(); loadActive(); }
   }
-
-  async function reject(item, reason) {
-    setUnacted((prev) => prev.filter((it) => it.oh_id !== item.oh_id));
+  // active → qualified (moves to the Qualified Leads page). Captures the
+  // seller's phone first; saving it auto-advances the lead to qualified.
+  async function qualify(item, phone) {
+    setActive((prev) => prev.filter((it) => it.oh_id !== item.oh_id));
+    const body = { stage: 'qualified' };
+    if (phone && phone !== item.seller_phone) body.seller_phone = phone;
+    try { await api.patch(`/api/inventory/${item.oh_id}`, body); }
+    catch { loadActive(); }
+  }
+  async function rejectLead(item, reason) {
+    setLeads((prev) => prev.filter((it) => it.oh_id !== item.oh_id));
     try { await api.patch(`/api/inventory/${item.oh_id}`, { stage: 'rejected', stage_reason: reason }); }
-    catch { loadUnacted(); }
+    catch { loadLeads(); }
+  }
+  async function rejectActive(item, reason) {
+    setActive((prev) => prev.filter((it) => it.oh_id !== item.oh_id));
+    try { await api.patch(`/api/inventory/${item.oh_id}`, { stage: 'rejected', stage_reason: reason }); }
+    catch { loadActive(); }
   }
 
   function onSearch(e) { e.preventDefault(); setQApplied(qInput.trim()); }
@@ -250,21 +244,24 @@ export default function Leads() {
         </form>
         <div className="toolbar-spacer" />
         <div className="view-toggle">
-          <button className={paneView === 'unqualified' ? 'on' : ''} onClick={() => setPaneView('unqualified')}>Unqualified</button>
+          <button className={paneView === 'lead' ? 'on' : ''} onClick={() => setPaneView('lead')}>Lead</button>
           <button className={paneView === 'both' ? 'on' : ''} onClick={() => setPaneView('both')}>Both</button>
-          <button className={paneView === 'qualified' ? 'on' : ''} onClick={() => setPaneView('qualified')}>Qualified</button>
+          <button className={paneView === 'active' ? 'on' : ''} onClick={() => setPaneView('active')}>Active</button>
         </div>
       </div>
 
       <div className="leads-split" ref={containerRef}>
-        {paneView !== 'qualified' && (
+        {paneView !== 'active' && (
           <div className="leads-pane" style={{ width: paneView === 'both' ? `calc(${leftPct}% - 7px)` : '100%' }}>
             <div className="leads-pane-head">
-              <h3>Unacted Leads</h3>
-              <span className="lph-count accent">{unacted.length}</span>
-              <span className="muted" style={{ fontSize: 12 }}>status: unqualified</span>
+              <h3>Leads</h3>
+              <span className="lph-count accent">{leads.length}</span>
+              <span className="muted" style={{ fontSize: 12 }}>status: lead</span>
             </div>
-            <UnactedTable items={unacted} loading={loadingL} role={user?.role} onUpdated={patch(setUnacted)} onQualify={qualify} onReject={reject} />
+            <ActionTable items={leads} loading={loadingL} role={user?.role} onUpdated={patch(setLeads)}
+              primaryLabel="Active" onPrimary={activate} onReject={rejectLead}
+              reasons={rejectReasonsForStage('lead')} emptyText="No leads."
+              isNew={(it) => isCreatedToday(it.created_at)} />
           </div>
         )}
 
@@ -276,14 +273,17 @@ export default function Leads() {
           </div>
         )}
 
-        {paneView !== 'unqualified' && (
+        {paneView !== 'lead' && (
           <div className="leads-pane" style={{ width: paneView === 'both' ? `calc(${100 - leftPct}% - 7px)` : '100%' }}>
             <div className="leads-pane-head">
-              <h3>Qualified Leads</h3>
-              <span className="lph-count">{qualified.length}</span>
-              <span className="muted" style={{ fontSize: 12 }}>status: qualified</span>
+              <h3>Active Leads</h3>
+              <span className="lph-count">{active.length}</span>
+              <span className="muted" style={{ fontSize: 12 }}>status: active</span>
             </div>
-            <QualifiedTable items={qualified} loading={loadingR} role={user?.role} onUpdated={patch(setQualified)} />
+            <ActionTable items={active} loading={loadingR} role={user?.role} onUpdated={patch(setActive)}
+              primaryLabel="Add Phone No." primaryMode="phone" onPrimary={qualify} onReject={rejectActive}
+              reasons={rejectReasonsForStage('active')} emptyText="No active leads."
+              isNew={(it) => !!it.active_today} />
           </div>
         )}
       </div>

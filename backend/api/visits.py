@@ -270,16 +270,21 @@ def schedule_visit():
                 }), 502
 
             visit_id = forms_response.get("visit_id")
+            # `prev` captures the pre-update stage in the same statement (CTEs see
+            # the snapshot before the UPDATE), so we can log a proper stage_change.
             cur.execute(
-                """UPDATE inventory SET
+                """WITH prev AS (SELECT stage FROM inventory WHERE oh_id = %s)
+                   UPDATE inventory SET
                        stage = 'visit_scheduled',
                        forms_visit_id = %s,
                        visit_at = %s,
                        visit_exec = %s
-                   WHERE oh_id = %s RETURNING *""",
-                (visit_id, visit_at, field_exec_phone, oh_id),
+                   WHERE oh_id = %s
+                   RETURNING *, (SELECT stage FROM prev) AS prev_stage""",
+                (oh_id, visit_id, visit_at, field_exec_phone, oh_id),
             )
             row = cur.fetchone()
+            old_stage = row.pop("prev_stage", None)
             log_activity(
                 cur,
                 actor_user_id=g.user["id"],
@@ -297,6 +302,22 @@ def schedule_visit():
                     "forms_visit_id": visit_id,
                 },
             )
+            # Also log the stage transition as a stage_change so it's visible to
+            # the morning-cohort / NEW-badge reconstructions (which key on
+            # before/after_value). Skip if the stage didn't actually change.
+            if old_stage and old_stage != "visit_scheduled":
+                log_activity(
+                    cur,
+                    actor_user_id=g.user["id"],
+                    actor_email=g.user["email"],
+                    entity_type="inventory",
+                    entity_id=oh_id,
+                    action="stage_change",
+                    field="stage",
+                    before_value=old_stage,
+                    after_value="visit_scheduled",
+                    metadata={"via": "visit_schedule"},
+                )
         return jsonify(row)
     finally:
         conn.close()

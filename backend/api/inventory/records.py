@@ -163,7 +163,7 @@ def create_one():
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s,
                           %s, %s, %s,
                           %s, %s, %s, %s, %s,
-                          'unqualified', %s, %s,
+                          'lead', %s, %s,
                           (NOW() AT TIME ZONE 'Asia/Kolkata')::DATE, NULL)
                 RETURNING *
                 """,

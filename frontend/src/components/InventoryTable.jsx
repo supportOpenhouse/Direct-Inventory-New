@@ -2,7 +2,7 @@ import { Fragment, useState } from 'react';
 import { api } from '../api/client.js';
 import ExpandPanel from './ExpandPanel.jsx';
 import {
-  displayCity, formatDateRel, formatDateShort, formatPrice, rowFlag, starColor,
+  displayCity, formatDateRel, formatDateShort, formatPrice, isCreatedToday, reasonLabelAny, rowFlag, starColor,
   STAGE_DOT_COLOR, stageLabel, variation,
 } from '../utils/format.js';
 
@@ -61,12 +61,14 @@ const SKELETON_ROWS = 8;
 export default function InventoryTable({
   items, role, sort, onSort, onUpdated, loading = false,
   selectMode = false, selected, onToggleSelect, onToggleSelectAll, allowStatusEdit = true,
+  showReasonCol = false,
 }) {
   const [openId, setOpenId] = useState(null);
   const canSetPriority = ['admin', 'manager', 'rm'].includes(role);
   const isAdmin = role === 'admin';
-  // 16 always-on columns + OH-ID + Assigned RM (admin only) + select checkbox.
-  const colCount = 16 + (isAdmin ? 2 : 0) + (selectMode ? 1 : 0);
+  // 16 always-on columns + OH-ID + Assigned RM (admin only) + select checkbox
+  // + optional Reason column.
+  const colCount = 16 + (isAdmin ? 2 : 0) + (selectMode ? 1 : 0) + (showReasonCol ? 1 : 0);
 
   // Header checkbox state — tristate over the currently rendered (paged) rows.
   const visibleIds = items.map((it) => it.oh_id);
@@ -111,6 +113,7 @@ export default function InventoryTable({
             <SortTh field="oh_price" label="OH Price" sort={sort} onSort={onSort} align="right" />
             <SortTh field="variation" label="Variation" sort={sort} onSort={onSort} align="right" />
             <SortTh field="stage" label="Stage" sort={sort} onSort={onSort} cls="inv-col-stage" />
+            {showReasonCol && <th className="inv-th inv-col-reason">Reason</th>}
             <SortTh field="follow_up_at" label="Follow-up" sort={sort} onSort={onSort} cls="inv-col-followup" />
             <SortTh field="seller_name" label="Seller" sort={sort} onSort={onSort} />
             <SortTh field="seller_phone" label="Phone" sort={sort} onSort={onSort} />
@@ -160,14 +163,25 @@ export default function InventoryTable({
                   </td>
                   {isAdmin && <td className="inv-td-id">{item.oh_id}</td>}
                   <td><span className="city-chip">{displayCity(item.city)?.toUpperCase()}</span></td>
-                  <td className={`inv-td-society ${flag ? `inv-society-${flag}` : ''}`}><span className="inv-clip inv-clip-society" title={item.society || ''}>{item.society || '—'}</span></td>
+                  <td className={`inv-td-society ${flag ? `inv-society-${flag}` : ''}`}>
+                    <span className="inv-clip inv-clip-society" title={item.society || ''}>{item.society || '—'}</span>
+                    {isCreatedToday(item.created_at) && <img className="new-badge-img" src="/new.png" alt="NEW" />}
+                  </td>
                   <td className="inv-col-bhk">{item.bedrooms != null ? `${item.bedrooms} BHK` : '—'}</td>
                   <td>{item.floor || '—'}</td>
                   <td className="inv-col-area">{item.area_sqft != null ? `${item.area_sqft} sqft` : '—'}</td>
                   <td className="inv-td-num val-orange inv-col-asking">{formatPrice(item.price)}</td>
                   <td className={`inv-td-num ${item.oh_price ? (v && v.sign === 'flat' ? 'val-brown' : 'val-green') : 'muted'}`}>{item.oh_price ? formatPrice(item.oh_price) : '—'}</td>
                   <td className={`inv-td-num ${v ? `val-var-${v.sign}` : 'muted'}`}>{v ? v.label : '—'}</td>
-                  <td className="inv-col-stage"><span className="stage-dot" style={{ background: STAGE_DOT_COLOR[item.stage] }} />{stageLabel(item.stage)}</td>
+                  <td className="inv-col-stage">
+                    <span className="stage-dot" style={{ background: STAGE_DOT_COLOR[item.stage] }} />{stageLabel(item.stage)}
+                    {item.stage === 'visit_scheduled' && item.visit_overdue && <span className="stage-overdue">Overdue</span>}
+                  </td>
+                  {showReasonCol && (
+                    <td className="inv-td-muted inv-col-reason">
+                      {item.stage_reason ? <span className="inv-clip" title={reasonLabelAny(item.stage_reason)}>{reasonLabelAny(item.stage_reason)}</span> : '—'}
+                    </td>
+                  )}
                   <td className="inv-td-muted inv-col-followup">{formatDateShort(item.follow_up_at)}</td>
                   <td><span className="inv-clip inv-clip-seller" title={item.seller_name || ''}>{item.seller_name || '—'}</span></td>
                   <td className="inv-td-muted">{item.seller_phone || '—'}</td>

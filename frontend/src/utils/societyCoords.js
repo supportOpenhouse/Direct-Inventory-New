@@ -15,19 +15,20 @@ export async function societyCoords() {
   if (!_inflight) {
     _inflight = api.get('/api/geo/society-coords')
       .then((r) => {
+        const items = r.items || [];
         const byNameCity = {};
         const byName = {};
-        for (const it of r.items || []) {
+        for (const it of items) {
           const n = norm(it.name);
           if (!n) continue;
           const pt = [it.lat, it.lng];
           byName[n] = pt;
           if (it.city) byNameCity[`${n}|${normCity(it.city)}`] = pt;
         }
-        _data = { byNameCity, byName };
+        _data = { byNameCity, byName, items };
         return _data;
       })
-      .catch(() => { _data = { byNameCity: {}, byName: {} }; return _data; });
+      .catch(() => { _data = { byNameCity: {}, byName: {}, items: [] }; return _data; });
   }
   return _inflight;
 }

@@ -7,7 +7,7 @@ function formatTs(iso) {
   return `${d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}, ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}`;
 }
 function categoryClass(t) {
-  return ({ auth: 'cat-pill cat-auth', inventory: 'cat-pill cat-inventory', user: 'cat-pill cat-user', sync: 'cat-pill cat-sync', cp_match_scan: 'cat-pill cat-sync' })[t] || 'cat-pill cat-default';
+  return ({ auth: 'cat-pill cat-auth', inventory: 'cat-pill cat-inventory', user: 'cat-pill cat-user', sync: 'cat-pill cat-sync', cp_match_scan: 'cat-pill cat-sync', supply_sync: 'cat-pill cat-sync' })[t] || 'cat-pill cat-default';
 }
 
 function Details({ row }) {
@@ -18,6 +18,15 @@ function Details({ row }) {
       <div>
         <div className="det-change"><strong>CP match scan</strong> · {metadata.total ?? '?'} rows</div>
         <div className="det-sub">perfect {metadata.perfect ?? 0} · partial {metadata.partial ?? 0} · no match {metadata.no_match ?? 0}</div>
+      </div>
+    );
+  }
+  // Supply Closure Tracker sync run — summarise what was pulled and updated.
+  if (entity_type === 'supply_sync' && metadata && typeof metadata === 'object') {
+    return (
+      <div>
+        <div className="det-change"><strong>Supply sync</strong> · {metadata.updated ?? 0} updated</div>
+        <div className="det-sub">{metadata.matched ?? 0} matched of {metadata.source_rows ?? 0} source rows</div>
       </div>
     );
   }

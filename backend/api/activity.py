@@ -261,7 +261,7 @@ _WINNERS_CTE = """
                      a.entity_id,
                      a.created_at DESC
         ) latest
-        WHERE latest.final_stage IS DISTINCT FROM 'unqualified'
+        WHERE latest.final_stage NOT IN ('lead', 'unqualified')
     )
 """
 

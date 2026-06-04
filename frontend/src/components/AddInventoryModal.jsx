@@ -45,7 +45,7 @@ export default function AddInventoryModal({ onClose, onAdded }) {
       setSubmitting(true);
       const payload = {
         ...f,
-        stage: 'unqualified',
+        stage: 'lead',
         bedrooms: f.bedrooms === '' ? null : Number(f.bedrooms),
         area_sqft: f.area_sqft === '' ? null : Number(f.area_sqft),
         price: f.price === '' ? null : Math.round(Number(f.price) * 100000),

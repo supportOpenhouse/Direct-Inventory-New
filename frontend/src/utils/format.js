@@ -67,7 +67,7 @@ export function isCreatedToday(iso) {
 export function rowFlag(item) {
   if (!item) return null;
   if (item.stage === 'follow_up' && isDateBeforeToday(item.follow_up_at)) return 'yellow';
-  if (item.stage === 'unqualified' || item.stage === 'qualified') {
+  if (item.stage === 'lead' || item.stage === 'unqualified' || item.stage === 'active') {
     const d = daysAgo(item.created_at);
     if (d != null && d >= 1) return 'red';
   }
@@ -86,7 +86,8 @@ export function formatDateRel(iso) {
 
 export function stageLabel(s) {
   return ({
-    unqualified: 'Unqualified',
+    lead: 'Lead',
+    active: 'Active Lead',
     qualified: 'Qualified',
     call_not_received: 'Call Not Received',
     follow_up: 'Follow Up',
@@ -98,8 +99,8 @@ export function stageLabel(s) {
     onboarded: 'Onboarded',
     rejected_post_visit: 'Rejected Post Visit',
     cancelled_post_token: 'Cancelled Post Token',
-    // Legacy labels — kept so historical activity-log rows still render.
-    lead: 'Unqualified',
+    // Legacy — historical rows still render.
+    unqualified: 'Lead',
     follow_up_cnr: 'Follow Up (CNR)',
     visit_completed: 'Visit Completed',
     offer_given: 'Offer Given',
@@ -107,14 +108,13 @@ export function stageLabel(s) {
   })[s] || s;
 }
 
-// Board-visible stages, in display + flow order. `unqualified` = unacted intake
-// (Leads page, left column); `qualified` = acted (right column). Drives count
-// pills, stage dropdowns, and analytics order.
-//   unqualified -> qualified -> {call_not_received, follow_up,
-//                                visit_scheduled, rejected}
-//   {call_not_received, follow_up} -> {visit_scheduled, rejected}
+// Board-visible stages, in display + flow order. Drives count pills, stage
+// dropdowns and analytics order.
+//   lead -> active -> qualified -> {call_not_received, follow_up,
+//                                   visit_scheduled, rejected}
 export const STAGES = [
-  'unqualified',
+  'lead',
+  'active',
   'qualified',
   'call_not_received',
   'follow_up',
@@ -123,6 +123,8 @@ export const STAGES = [
 ];
 
 export const STAGE_DOT_COLOR = {
+  lead: '#fa541c',
+  active: '#f59e0b',
   unqualified: '#fa541c',
   qualified: '#16a34a',
   call_not_received: '#facc15',
@@ -213,22 +215,41 @@ export const REJECT_REASONS = [
   { value: 'broker_listing', label: 'Broker Listing' },
 ];
 
-// Every reject reason across both contexts, de-duplicated by value (the two
-// contexts share `invalid_duplicate`) — for breakdowns / labels that need to
-// cover whatever value a row actually carries.
-export const ALL_REJECT_REASONS = [...UNQUALIFIED_REJECT_REASONS, ...REJECT_REASONS]
+// Active-lead rejects — contact-quality reasons shown when rejecting from the
+// 'active' stage (after the lead has been picked up but the seller couldn't be
+// reached / the number was bad).
+export const ACTIVE_REJECT_REASONS = [
+  { value: 'number_not_found', label: 'No. not found' },
+  { value: 'invalid_number', label: 'Invalid No.' },
+];
+
+// Every reject reason across all contexts, de-duplicated by value (the contexts
+// share `invalid_duplicate`) — for breakdowns / labels that need to cover
+// whatever value a row actually carries.
+export const ALL_REJECT_REASONS = [...UNQUALIFIED_REJECT_REASONS, ...REJECT_REASONS, ...ACTIVE_REJECT_REASONS]
   .filter((r, i, arr) => arr.findIndex((x) => x.value === r.value) === i);
 
 // Pick the reason list for the lead's CURRENT stage: an unqualified/intake lead
-// uses the listing-quality reasons; anything already worked uses the rest.
+// uses the listing-quality reasons; an active lead uses the contact-quality
+// reasons; anything already worked uses the rest.
 export function rejectReasonsForStage(stage) {
-  return stage === 'unqualified' ? UNQUALIFIED_REJECT_REASONS : REJECT_REASONS;
+  if (stage === 'lead' || stage === 'unqualified') return UNQUALIFIED_REJECT_REASONS;
+  if (stage === 'active') return ACTIVE_REJECT_REASONS;
+  return REJECT_REASONS;
 }
 
 export function rejectReasonLabel(code) {
   if (!code) return '';
-  const all = [...UNQUALIFIED_REJECT_REASONS, ...REJECT_REASONS];
-  return all.find((r) => r.value === code)?.label || code;
+  return ALL_REJECT_REASONS.find((r) => r.value === code)?.label || code;
+}
+
+// Label for any stage_reason regardless of which stage it belongs to — reject
+// reasons OR supply-tracker reasons — falling back to a title-cased code.
+export function reasonLabelAny(code) {
+  if (!code) return '';
+  return ALL_REJECT_REASONS.find((r) => r.value === code)?.label
+    || ALL_SUPPLY_REASONS.find((r) => r.value === code)?.label
+    || code.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 // Greater Noida is rolled up into Noida everywhere in the UI.

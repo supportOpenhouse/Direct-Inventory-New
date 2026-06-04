@@ -5,7 +5,7 @@ import InventoryBoard from '../components/InventoryBoard.jsx';
 export default function VisitScheduled() {
   return (
     <div>
-      <InventoryBoard fixedStages={['visit_scheduled']} showAdd={false} stageFilterable={false} allowStatusEdit={false} />
+      <InventoryBoard fixedStages={['visit_scheduled']} showAdd={false} stageFilterable={false} allowStatusEdit={false} annotateVisitOverdue />
     </div>
   );
 }

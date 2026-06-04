@@ -21,7 +21,8 @@ const PAGE_SIZE = 50;
 export default function InventoryBoard({
   fixedStages = null, showAdd = true, stageFilterable = true, toolbarExtra = null,
   allowStatusEdit = true, reasonFilter = false, hideFollowUpFilter = false, reasonOptions = undefined,
-  reloadSignal = 0, onReload = null, extraStageGroups = [],
+  reloadSignal = 0, onReload = null, extraStageGroups = [], annotateVisitOverdue = false,
+  showReasonCol = false,
 }) {
   const { user } = useAuth();
   const [qInput, setQInput] = useState('');
@@ -55,6 +56,7 @@ export default function InventoryBoard({
     const effectiveStages = stageSel.size > 0 ? Array.from(stageSel) : (fixedStages || []);
     if (effectiveStages.length) p.set('stage', effectiveStages.join(','));
     if (sort.field) { p.set('sort', sort.field); p.set('dir', sort.dir); }
+    if (annotateVisitOverdue) p.set('annotate_visit_overdue', '1');
     for (const [k, v] of Object.entries(filtersApplied)) p.set(k, String(v));
     return p;
   }
@@ -196,7 +198,7 @@ export default function InventoryBoard({
       </div>
 
       <InventoryTable items={items} loading={loading} role={user?.role} sort={sort} onSort={setSort} onUpdated={patchItem}
-        selectMode={selectMode} selected={selected} onToggleSelect={toggleSelect} onToggleSelectAll={toggleSelectAll} allowStatusEdit={allowStatusEdit} />
+        selectMode={selectMode} selected={selected} onToggleSelect={toggleSelect} onToggleSelectAll={toggleSelectAll} allowStatusEdit={allowStatusEdit} showReasonCol={showReasonCol} />
 
       {showFilters && (
         <FilterPanel initial={filterFormState} defaultCity={city} role={user?.role}

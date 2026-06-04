@@ -1,7 +1,10 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
-import { foldCities } from '../utils/format.js';
+import { CITIES, foldCities } from '../utils/format.js';
+
+const ALL_ASSIGNED = '__assigned__';
+const ALL_DATA = '__all__';
 
 // Lazy — MapLibre is heavy and only needed when a coverage map is shown.
 const ScopeMap = lazy(() => import('../components/ScopeMap.jsx'));
@@ -69,13 +72,25 @@ export default function MyProfile() {
   }, [isAdminViewer]);
 
   useEffect(() => {
-    if (!isAdminViewer || !viewId) { setMapProfile(null); return undefined; }
+    if (!isAdminViewer || !viewId || viewId === ALL_ASSIGNED || viewId === ALL_DATA) { setMapProfile(null); return undefined; }
     let alive = true;
+    setMapProfile(null); // clear old user's data immediately → show loading while fetching
     api.get(`/api/users/profile?user_id=${viewId}`)
       .then((r) => { if (alive) setMapProfile(r); })
       .catch(() => { if (alive) setMapProfile(null); });
     return () => { alive = false; };
   }, [isAdminViewer, viewId]);
+
+  // Union of all RMs' assigned scope — for "View all assigned".
+  const assignedScope = useMemo(() => {
+    const rms = people.filter((u) => u.role === 'rm');
+    const uniq = (a) => [...new Set(a)];
+    return {
+      cities: foldCities(uniq(rms.flatMap((u) => u.cities || []))),
+      society: uniq(rms.flatMap((u) => u.society || [])),
+      micro_market: uniq(rms.flatMap((u) => u.micro_market || [])),
+    };
+  }, [people]);
 
   if (loading) return <div className="al-empty">Loading…</div>;
   if (error) return <div className="modal-error">{error}</div>;
@@ -87,9 +102,18 @@ export default function MyProfile() {
   const showTeam = role === 'admin' || role === 'manager';
   const showScope = role === 'manager' || role === 'rm';
 
-  // Map target: admin → the selected user (if any); everyone else → themselves.
-  const mapTarget = isAdminViewer ? mapProfile : me;
-  const showMap = !!mapTarget && (mapTarget.role === 'manager' || mapTarget.role === 'rm');
+  // What the coverage map shows: { cities, society, plotAll, label }.
+  let mapScope = null;
+  if (!isAdminViewer) {
+    if (role === 'manager' || role === 'rm') mapScope = { cities: cityList, society: p.society || [], micro_market: p.micro_market || [], label: '' };
+  } else if (viewId === ALL_DATA) {
+    mapScope = { cities: CITIES, society: [], micro_market: [], plotAll: true, label: 'All data' };
+  } else if (viewId === ALL_ASSIGNED) {
+    mapScope = { cities: assignedScope.cities, society: assignedScope.society, micro_market: assignedScope.micro_market, label: 'All assigned (RMs)' };
+  } else if (mapProfile && (mapProfile.role === 'manager' || mapProfile.role === 'rm')) {
+    mapScope = { cities: foldCities(mapProfile.cities), society: mapProfile.society || [], micro_market: mapProfile.micro_market || [], label: mapProfile.name || mapProfile.email };
+  }
+  const showMap = !!mapScope;
 
   const detailsCard = (
     <div className="card-block">
@@ -151,6 +175,8 @@ export default function MyProfile() {
       <label>Map — view as</label>
       <select value={viewId} onChange={(e) => setViewId(e.target.value)} className="role-select">
         <option value="">— select a user —</option>
+        <option value={ALL_ASSIGNED}>View all assigned</option>
+        <option value={ALL_DATA}>View all data</option>
         {people.map((u) => <option key={u.id} value={u.id}>{u.name || u.email} · {u.role}</option>)}
       </select>
     </div>
@@ -159,19 +185,19 @@ export default function MyProfile() {
   const mapCard = showMap ? (
     <div className="card-block scope-card">
       <h3>Coverage map
-        {isAdminViewer && mapTarget && <span className="muted"> — {mapTarget.name || mapTarget.email}</span>}
+        {isAdminViewer && mapScope.label && <span className="muted"> — {mapScope.label}</span>}
         <span className="muted"> · approximate</span>
       </h3>
       <Suspense fallback={<div className="scope-map-skeleton">Loading map…</div>}>
-        <ScopeMap cities={foldCities(mapTarget.cities)} society={mapTarget.society || []} />
+        <ScopeMap cities={mapScope.cities} society={mapScope.society} micro_market={mapScope.micro_market || []} plotAll={!!mapScope.plotAll} />
       </Suspense>
     </div>
   ) : isAdminViewer && (
-    // Admin with no user selected — keep the map's place with a skeletal box.
+    // Admin with nothing selected — keep the map's place with a skeletal box.
     <div className="card-block scope-card">
       <h3>Coverage map</h3>
       <div className="scope-map-skeleton">
-        {viewId ? 'Loading…' : 'Select a user above to view their coverage map.'}
+        {viewId ? 'Loading…' : 'Select a user or view option above to show the coverage map.'}
       </div>
     </div>
   );

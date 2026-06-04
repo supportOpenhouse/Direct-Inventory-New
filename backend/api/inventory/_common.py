@@ -21,22 +21,71 @@ Stages (Leads board order):
 """
 from __future__ import annotations
 
+import logging
+
 from flask import Blueprint
+
+from ...db import get_props_conn
 
 bp = Blueprint("inventory", __name__, url_prefix="/api/inventory")
 
+log = logging.getLogger(__name__)
+
+# Property-DB source for scheduled visit dates: cp_inventory_status (the table
+# supply-sync reads), joined cp_id = inventory.oh_id. The column is free TEXT
+# (default ''), holding an ISO 'YYYY-MM-DD' date (what our scheduler writes via
+# datetime.fromisoformat). Change these if the column/table differs.
+VISIT_TABLE = "cp_inventory_status"
+VISIT_JOIN_COL = "cp_id"
+VISIT_DATE_COL = "visit_scheduled_date"
+_ISO_DATE_RE = r"^\d{4}-\d{2}-\d{2}"
+
+
+def overdue_visit_ids(oh_ids):
+    """Subset of `oh_ids` whose scheduled visit date in the property DB is a
+    valid ISO date earlier than today (IST) — i.e. the visit is overdue.
+
+    ISO date text sorts chronologically, so we compare lexically (no ::date cast
+    that could choke on the column's '' default or malformed rows). Guarded:
+    returns an empty set on any property-DB failure (e.g. column not added yet)
+    so callers degrade gracefully.
+    """
+    ids = [i for i in oh_ids if i]
+    if not ids:
+        return set()
+    try:
+        pconn = get_props_conn()
+        try:
+            with pconn, pconn.cursor() as pcur:
+                pcur.execute(
+                    f"SELECT DISTINCT TRIM({VISIT_JOIN_COL}) AS cp FROM {VISIT_TABLE} "
+                    f"WHERE TRIM({VISIT_JOIN_COL}) = ANY(%s) "
+                    f"  AND TRIM({VISIT_DATE_COL}) ~ %s "
+                    f"  AND TRIM({VISIT_DATE_COL}) < to_char((NOW() AT TIME ZONE 'Asia/Kolkata')::date, 'YYYY-MM-DD')",
+                    (ids, _ISO_DATE_RE),
+                )
+                return {r["cp"] for r in pcur.fetchall()}
+        finally:
+            pconn.close()
+    except Exception:
+        log.warning("overdue_visit_ids: property-DB read failed", exc_info=True)
+        return set()
+
 VALID_STAGES = {
-    # Active stages shown on the board, in flow order:
-    #   unqualified -> qualified -> {call_not_received, follow_up,
-    #                                visit_scheduled, rejected}
-    #   {call_not_received, follow_up} -> {visit_scheduled, rejected}
-    # `unqualified` is the intake stage (formerly named `lead`).
-    "unqualified",           # intake — the Leads page "unqualified" column
-    "qualified",             # acted-on
+    # Lead flow, in order:
+    #   lead -> active -> qualified -> {call_not_received, follow_up,
+    #                                   visit_scheduled, rejected}
+    # `lead` is the raw intake stage; `active` is a lead being worked; `qualified`
+    # is one that's been qualified.
+    "lead",                  # intake — Leads page left column
+    "active",                # active lead — Leads page right column
+    "qualified",             # qualified — Qualified Leads page
     "call_not_received",     # CNR — first attempt failed
     "follow_up",             # ongoing conversation
     "visit_scheduled",
     "rejected",
+    # Legacy intake name (folded to 'lead' at read time); still accepted.
+    "unqualified",
     # Supply Closure Tracker stages — post-visit acquisition funnel, synced from
     # PROPERTIES_DB.cp_inventory_status (direct_stage). Live alongside the lead
     # stages; shown only on the tracker page.
@@ -55,7 +104,7 @@ VALID_STAGES = {
 
 # Lead-board stages, in display order. Drives count chips + the counts endpoint.
 ALL_STAGES = [
-    "unqualified", "qualified", "call_not_received", "follow_up", "visit_scheduled", "rejected",
+    "lead", "active", "qualified", "call_not_received", "follow_up", "visit_scheduled", "rejected",
 ]
 
 # Supply Closure Tracker stages, in funnel order.
@@ -78,9 +127,10 @@ SORTABLE_FIELDS = {
     "variation":     "CASE WHEN oh_price IS NULL OR oh_price = 0 THEN NULL "
                      "ELSE (price::FLOAT - oh_price) / oh_price * 100 END",
     # Stage sorts in pipeline order, not alphabetically.
-    "stage":         "CASE stage WHEN 'unqualified' THEN 0 WHEN 'qualified' THEN 1 "
-                     "WHEN 'call_not_received' THEN 2 WHEN 'follow_up' THEN 3 "
-                     "WHEN 'visit_scheduled' THEN 4 WHEN 'rejected' THEN 5 ELSE 6 END",
+    "stage":         "CASE stage WHEN 'lead' THEN 0 WHEN 'unqualified' THEN 0 "
+                     "WHEN 'active' THEN 1 WHEN 'qualified' THEN 2 "
+                     "WHEN 'call_not_received' THEN 3 WHEN 'follow_up' THEN 4 "
+                     "WHEN 'visit_scheduled' THEN 5 WHEN 'rejected' THEN 6 ELSE 7 END",
     "seller_name":   "seller_name",
     "seller_phone":  "seller_phone",
     "posting_date":  "posting_date",
@@ -114,7 +164,13 @@ WORKED_REJECT_REASONS = {
     "sold",
     "broker_listing",
 }
-VALID_REJECT_REASONS = LEADS_REJECT_REASONS | WORKED_REJECT_REASONS
+# Contact-quality reasons surfaced when rejecting from the 'active' stage (the
+# seller couldn't be reached). Mirrors ACTIVE_REJECT_REASONS in the frontend.
+ACTIVE_REJECT_REASONS = {
+    "number_not_found",
+    "invalid_number",
+}
+VALID_REJECT_REASONS = LEADS_REJECT_REASONS | WORKED_REJECT_REASONS | ACTIVE_REJECT_REASONS
 
 EDITABLE_RAW_FIELDS = {
     "source", "city", "locality", "society", "bedrooms", "area_sqft",
@@ -133,11 +189,11 @@ PRIORITY_ROLES = {"admin", "manager", "rm"}
 
 
 def fold_lead_rows(rows):
-    """In-place: rewrite any row still carrying the legacy 'lead' stage to
-    'unqualified', so the API never emits 'lead' even if a stray row exists."""
+    """In-place: rewrite any row still carrying the legacy 'unqualified' stage to
+    'lead' (the current intake name), so the API always emits 'lead'."""
     for r in rows:
-        if r.get("stage") == "lead":
-            r["stage"] = "unqualified"
+        if r.get("stage") == "unqualified":
+            r["stage"] = "lead"
     return rows
 
 
@@ -208,10 +264,9 @@ def _build_filters(user: dict, args, alias: str = ""):
         # Comma-separated list → IN (...). Single value still works because
         # split on ',' returns [stage].
         stages = [s.strip() for s in stage.split(",") if s.strip()]
-        # Treat the legacy 'lead' value as 'unqualified' so any stray rows still
-        # surface under the Unqualified filter.
-        if "unqualified" in stages and "lead" not in stages:
-            stages.append("lead")
+        # Filtering 'lead' also catches the legacy 'unqualified' value.
+        if "lead" in stages and "unqualified" not in stages:
+            stages.append("unqualified")
         if len(stages) == 1:
             base_filters.append(f"AND {p}stage = %s")
             base_params.append(stages[0])

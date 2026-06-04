@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import NoteThread from './NoteThread.jsx';
 import StatusEditModal from './StatusEditModal.jsx';
+import EditDetailsModal from './EditDetailsModal.jsx';
 import { formatDateShort, formatPrice, STAGE_DOT_COLOR, stageLabel, supplyReasonLabel, variation } from '../utils/format.js';
 
 function Field({ label, children }) {
@@ -22,13 +23,21 @@ export default function ExpandPanel({ item, role, onUpdated, canPost = true, sec
   const v = variation(item.price, item.oh_price);
   const listing = item.listing_link && !/^internal:\/\//.test(item.listing_link) ? item.listing_link : null;
   const canEdit = canEditStatus && (['admin', 'manager', 'rm'].includes(role) || canPost);
+  // Editing the raw property/seller fields is allowed wherever editing is
+  // enabled, for the same roles the backend PATCH accepts.
+  const canEditDetails = canEditStatus && ['admin', 'manager', 'rm'].includes(role);
   const [showStatus, setShowStatus] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
 
   return (
     <div className="expand-inner">
       {show.includes('property') && (
         <div className="expand-sec">
-          <h4>🏠 Property Details</h4>
+          <h4>🏠 Property Details
+            {canEditDetails && (
+              <button type="button" className="btn-edit-details" onClick={() => setShowEdit(true)}>✎ Edit Details</button>
+            )}
+          </h4>
           <div className="field-grid-2">
             <Field label="Area">{item.area_sqft != null ? `${item.area_sqft} sqft` : '—'}</Field>
             <Field label="BHK">{item.bedrooms != null ? `${item.bedrooms} BHK` : '—'}</Field>
@@ -78,6 +87,7 @@ export default function ExpandPanel({ item, role, onUpdated, canPost = true, sec
             <span className="expand-status-cur">
               <span className="stage-dot" style={{ background: STAGE_DOT_COLOR[item.stage] }} />
               {stageLabel(item.stage)}
+              {item.stage === 'visit_scheduled' && item.visit_overdue && <span className="stage-overdue">Overdue</span>}
               {item.stage_reason && <span className="muted"> · {supplyReasonLabel(item.stage_reason)}</span>}
             </span>
             {canEdit && (
@@ -95,6 +105,9 @@ export default function ExpandPanel({ item, role, onUpdated, canPost = true, sec
 
       {showStatus && (
         <StatusEditModal item={item} onUpdated={(u) => onUpdated?.(u)} onClose={() => setShowStatus(false)} />
+      )}
+      {showEdit && (
+        <EditDetailsModal item={item} onUpdated={(u) => onUpdated?.(u)} onClose={() => setShowEdit(false)} />
       )}
     </div>
   );

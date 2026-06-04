@@ -479,32 +479,37 @@ export function mockApi(method, path, body) {
       if (Number.isNaN(d.getTime())) return null;
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     };
-    const fu = (it) => (it.follow_up_at || '').slice(0, 10);
-    const leads = DB.inventory.filter((it) => it.stage === 'lead');
-    const quals = DB.inventory.filter((it) => it.stage === 'qualified');
-    // Follow-up time buckets, split by stage (Follow Up vs Call Not Received).
-    const bucket = (items) => ({
-      today: items.filter((it) => fu(it) === today).length,
-      past: items.filter((it) => fu(it) < today).length,
-      future: items.filter((it) => fu(it) > today).length,
-    });
-    const fuStage = DB.inventory.filter((it) => it.stage === 'follow_up' && it.follow_up_at);
-    const cnrStage = DB.inventory.filter((it) => it.stage === 'call_not_received' && it.follow_up_at);
-    const rejected = DB.inventory.filter((it) => it.stage === 'rejected');
+    const olderToday = (items) => items.filter((it) => { const c = created(it); return c && c < today; }).length;
+    const byStage = (st) => DB.inventory.filter((it) => it.stage === st);
+    const leads = byStage('lead');
+    const active = byStage('active');
+    const quals = byStage('qualified');
+    const fuStage = byStage('follow_up');
+    const rejected = byStage('rejected');
     const by_reason = {};
     for (const it of rejected) { const r = it.stage_reason || 'unspecified'; by_reason[r] = (by_reason[r] || 0) + 1; }
+    const SUPPLY = ['pipeline', 'token_to_ama', 'onboarded', 'rejected_post_visit', 'cancelled_post_token'];
+    const supply = {};
+    for (const st of SUPPLY) supply[st] = byStage(st).length;
+    // Mock has no activity history, so "new" (entered-stage-today) can't be
+    // derived for active/follow_up — those fall to 0/old. Lead-new uses created
+    // today; qualified-new approximated by created today.
     return {
       leads: {
-        unqualified_new: leads.filter((it) => created(it) === today).length,
-        unqualified_old: leads.filter((it) => { const c = created(it); return c && c < today; }).length,
-        qualified_new: quals.filter((it) => created(it) === today).length,
-        qualified_old: quals.filter((it) => { const c = created(it); return c && c < today; }).length,
+        lead_new: leads.filter((it) => created(it) === today).length,
+        lead_old: leads.filter((it) => { const c = created(it); return c && c < today; }).length,
+        active_new: 0,
+        active_old: active.length,
       },
-      follow_ups: {
-        follow_up: bucket(fuStage),
-        call_not_received: bucket(cnrStage),
-      },
+      qualified: { new: quals.filter((it) => created(it) === today).length, old: olderToday(quals) },
+      follow_up: { new: 0, old: fuStage.length },
+      visit: { completed: Object.values(supply).reduce((a, b) => a + b, 0), to_be_completed: 0, overdue: 0 },
+      supply,
       rejected: { total: rejected.length, by_reason },
+      todays_task: {
+        leads: { total: olderToday(leads), worked: 0 },
+        active: { total: olderToday(active), worked: 0 },
+      },
     };
   }
 

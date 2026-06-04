@@ -15,6 +15,7 @@ from ._common import (
     _scope_clause,
     bp,
     fold_lead_rows,
+    overdue_visit_ids,
 )
 
 
@@ -55,7 +56,7 @@ def list_inventory():
                 # Stage order applies only inside the overdue bucket: Follow Up
                 # first, then Unqualified, then the rest.
                 f"CASE WHEN follow_up_at IS NOT NULL AND follow_up_at::DATE < {today_ist} "
-                f"     THEN CASE stage WHEN 'follow_up' THEN 0 WHEN 'unqualified' THEN 1 ELSE 2 END "
+                f"     THEN CASE stage WHEN 'follow_up' THEN 0 WHEN 'lead' THEN 1 WHEN 'unqualified' THEN 1 ELSE 2 END "
                 f"     ELSE 0 END ASC, "
                 # Overdue: most recent follow-up date first.
                 f"CASE WHEN follow_up_at IS NOT NULL AND follow_up_at::DATE < {today_ist} "
@@ -82,19 +83,28 @@ def list_inventory():
                 "updated_at DESC"
             )
 
-        # Opt-in flag: stamp each row with whether its stage was moved to
-        # 'qualified' on today's IST date (drives the "NEW" badge on the Leads
-        # qualified pane). Uses idx_activity_log_entity like the smart sort.
-        annotate_qt = (args.get("annotate_qualified_today") or "").strip().lower() in ("1", "true", "yes")
-        qt_select = (
-            ", EXISTS ("
-            "    SELECT 1 FROM activity_log al "
-            "    WHERE al.entity_type = 'inventory' AND al.entity_id = j.oh_id "
-            "      AND al.action = 'stage_change' AND al.after_value = 'qualified' "
-            "      AND (al.created_at AT TIME ZONE 'Asia/Kolkata')::DATE "
-            "          = (NOW() AT TIME ZONE 'Asia/Kolkata')::DATE"
-            "  ) AS qualified_today"
-        ) if annotate_qt else ""
+        # Opt-in flags: stamp each row with whether its stage was moved to a
+        # given stage on today's IST date — drives the "NEW" badge on the Leads
+        # Active pane (active_today) and the Qualified page (qualified_today).
+        # Uses idx_activity_log_entity like the smart sort. The stage value comes
+        # from this fixed map (never user input) so the column name is safe.
+        STAGE_TODAY_FLAGS = {
+            "annotate_qualified_today": "qualified",
+            "annotate_active_today": "active",
+        }
+        qt_parts = []
+        for param, stage_val in STAGE_TODAY_FLAGS.items():
+            if (args.get(param) or "").strip().lower() in ("1", "true", "yes"):
+                qt_parts.append(
+                    ", EXISTS ("
+                    "    SELECT 1 FROM activity_log al "
+                    "    WHERE al.entity_type = 'inventory' AND al.entity_id = j.oh_id "
+                    f"      AND al.action IN ('stage_change', 'bulk_stage_change') AND al.after_value = '{stage_val}' "
+                    "      AND (al.created_at AT TIME ZONE 'Asia/Kolkata')::DATE "
+                    "          = (NOW() AT TIME ZONE 'Asia/Kolkata')::DATE"
+                    f"  ) AS {stage_val}_today"
+                )
+        qt_select = "".join(qt_parts)
 
         list_sql = f"""
             SELECT j.*{qt_select} FROM ({INVENTORY_WITH_PRICING_SQL} {inner_where}) j
@@ -119,6 +129,15 @@ def list_inventory():
         annotate_cp_match(rows)
         # Legacy 'lead' rows surface as 'unqualified'.
         fold_lead_rows(rows)
+        # Opt-in: flag visit_scheduled rows whose scheduled visit date is past
+        # (from the property DB). Only runs when requested, to keep the hot list
+        # path free of the cross-DB read elsewhere.
+        if (args.get("annotate_visit_overdue") or "").strip().lower() in ("1", "true", "yes"):
+            vs_ids = [r["oh_id"] for r in rows if r.get("stage") == "visit_scheduled"]
+            overdue = overdue_visit_ids(vs_ids) if vs_ids else set()
+            for r in rows:
+                if r.get("stage") == "visit_scheduled":
+                    r["visit_overdue"] = r["oh_id"] in overdue
         return jsonify({"items": rows, "total": total, "limit": limit, "offset": offset})
     finally:
         conn.close()
@@ -197,8 +216,8 @@ def inventory_counts():
             )
             by_stage = {s: 0 for s in (*ALL_STAGES, *SUPPLY_STAGES)}
             for r in cur.fetchall():
-                # Fold the legacy 'lead' value into 'unqualified'.
-                st = "unqualified" if r["stage"] == "lead" else r["stage"]
+                # Fold the legacy 'unqualified' value into 'lead'.
+                st = "lead" if r["stage"] == "unqualified" else r["stage"]
                 if st in by_stage:
                     by_stage[st] += r["n"]
             cur.execute(

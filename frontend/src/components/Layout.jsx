@@ -6,13 +6,14 @@ import NotificationBell from './NotificationBell.jsx';
 import CpScanButton from './CpScanButton.jsx';
 import ReassignLeadsButton from './ReassignLeadsButton.jsx';
 import {
-  IconHome, IconLeads, IconFollowUp, IconVisit, IconPipeline, IconRejected,
+  IconHome, IconLeads, IconQualified, IconFollowUp, IconVisit, IconPipeline, IconRejected,
   IconReport, IconUsers, IconLogs, IconSun, IconMoon, IconMenu, IconLogout, IconChevron,
 } from './icons.jsx';
 
 const PRIMARY = [
   { to: '/', label: 'Home', Icon: IconHome, end: true },
   { to: '/leads', label: 'Leads', Icon: IconLeads },
+  { to: '/qualified-leads', label: 'Qualified Leads', Icon: IconQualified },
   { to: '/follow-ups', label: 'Follow Ups', Icon: IconFollowUp },
   { to: '/visit-scheduled', label: 'Visit Scheduled', Icon: IconVisit },
   { to: '/pipeline', label: 'Supply Closure Tracker', Icon: IconPipeline },
@@ -20,7 +21,7 @@ const PRIMARY = [
 ];
 
 const TITLES = {
-  '': 'Home', leads: 'Leads', 'follow-ups': 'Follow Ups', 'visit-scheduled': 'Visit Scheduled',
+  '': 'Home', leads: 'Leads', 'qualified-leads': 'Qualified Leads', 'follow-ups': 'Follow Ups', 'visit-scheduled': 'Visit Scheduled',
   pipeline: 'Supply Closure Tracker',
   'post-token': 'Post Token', rejected: 'Rejected', report: 'Report',
   'my-report': 'My Report', users: 'Users', logs: 'Activity Logs', profile: 'My Profile',

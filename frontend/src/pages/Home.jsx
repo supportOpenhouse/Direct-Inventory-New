@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { rejectReasonLabel, stageLabel, STAGE_DOT_COLOR, SUPPLY_STAGES } from '../utils/format.js';
 import InventoryBoard from '../components/InventoryBoard.jsx';
-import { IconLeads, IconFollowUp, IconPipeline, IconRejected } from '../components/icons.jsx';
+import { IconLeads, IconFollowUp, IconPipeline, IconRejected, IconQualified, IconVisit } from '../components/icons.jsx';
 
 const REJECTED_TOP = 3;
 
@@ -29,23 +29,45 @@ function QuadCard({ color, Icon, title, to, children }) {
   );
 }
 
-function BoardView() {
-  const [s, setS] = useState(null);
-  const [loading, setLoading] = useState(true);
+// One Today's-Task card: how many of the rows that sat in this stage at the
+// start of the day have since been worked (moved to a different stage).
+function TaskCard({ color, Icon, title, total, worked, loading }) {
+  const pct = total > 0 ? Math.round((worked / total) * 100) : 0;
+  return (
+    <div className="task-card" style={{ '--tc': color }}>
+      <div className="tc-head">
+        <span className="tc-ic" style={{ color }}><Icon size={18} /></span>
+        <h4>{title}</h4>
+      </div>
+      <div className="tc-frac">
+        <span className="tc-worked">{loading ? '—' : worked}</span>
+        <span className="tc-of">/ {loading ? '—' : total}</span>
+        <span className="tc-frac-lbl">worked</span>
+      </div>
+      <div className="tc-bar"><div className="tc-bar-fill" style={{ width: `${loading ? 0 : pct}%` }} /></div>
+      <div className="tc-sub">{loading ? '—' : `${total} at start of day · ${pct}% done`}</div>
+    </div>
+  );
+}
 
-  useEffect(() => {
-    let alive = true;
-    api.get('/api/home/summary')
-      .then((r) => { if (alive) setS(r); })
-      .catch(() => { if (alive) setS(null); })
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, []);
+function TodaysTask({ task, loading }) {
+  return (
+    <section className="todays-task">
+      <h2 className="tt-title">Today's Task</h2>
+      <div className="task-grid">
+        <TaskCard color="#fa541c" Icon={IconLeads} title="New Leads Added"
+          total={task?.leads?.total ?? 0} worked={task?.leads?.worked ?? 0} loading={loading} />
+        <TaskCard color="#f59e0b" Icon={IconQualified} title="New Active Leads Added"
+          total={task?.active?.total ?? 0} worked={task?.active?.worked ?? 0} loading={loading} />
+      </div>
+    </section>
+  );
+}
 
+function BoardView({ s, loading }) {
   const d = (x) => (loading ? '—' : (x ?? 0));
-  const f = s?.follow_ups;
 
-  // Rejected breakdown: top 5 reasons by count, the rest folded into "Others".
+  // Rejected breakdown: top 3 reasons by count, the rest folded into "Others".
   const byReason = s?.rejected?.by_reason || {};
   const rejRows = Object.entries(byReason)
     .map(([value, n]) => ({ value, n, label: value === 'unspecified' ? 'Unspecified' : rejectReasonLabel(value) }))
@@ -54,31 +76,52 @@ function BoardView() {
   const rejOthers = rejRows.slice(REJECTED_TOP).reduce((sum, r) => sum + r.n, 0);
 
   return (
-    <div className="home-quad">
+    <div className="home-quad home-quad-3">
+      {/* ── Row 1 ── */}
       <QuadCard color="#fa541c" Icon={IconLeads} title="Leads" to="/leads">
         <div className="quad-stats">
-          <StatTile num={d(s?.leads?.unqualified_new)} label="Unqualified · New" accent />
-          <StatTile num={d(s?.leads?.unqualified_old)} label="Unqualified · Old" />
-          <StatTile num={d(s?.leads?.qualified_new)} label="Qualified · New" />
-          <StatTile num={d(s?.leads?.qualified_old)} label="Qualified · Old" />
+          <StatTile num={d(s?.leads?.lead_new)} label="Lead · New" accent />
+          <StatTile num={d(s?.leads?.lead_old)} label="Lead · Old" />
+          <StatTile num={d(s?.leads?.active_new)} label="Active · New" accent />
+          <StatTile num={d(s?.leads?.active_old)} label="Active · Old" />
         </div>
       </QuadCard>
 
-      <QuadCard color="#f97316" Icon={IconFollowUp} title="Follow Ups" to="/follow-ups">
-        <div className="fu-matrix">
-          <div className="fu-mrow fu-mhead"><span /><span>Today</span><span className="fu-overdue">Overdue</span><span>Future</span></div>
-          <div className="fu-mrow">
-            <span className="fu-mlbl"><span className="stage-dot" style={{ background: '#f97316' }} />Follow Up</span>
-            <span>{d(f?.follow_up?.today)}</span><span className="fu-overdue">{d(f?.follow_up?.past)}</span><span>{d(f?.follow_up?.future)}</span>
-          </div>
-          <div className="fu-mrow">
-            <span className="fu-mlbl"><span className="stage-dot" style={{ background: '#facc15' }} />Call Not Received</span>
-            <span>{d(f?.call_not_received?.today)}</span><span className="fu-overdue">{d(f?.call_not_received?.past)}</span><span>{d(f?.call_not_received?.future)}</span>
+      <QuadCard color="#16a34a" Icon={IconQualified} title="Qualified Leads" to="/qualified-leads">
+        <div className="quad-stats">
+          <StatTile num={d(s?.qualified?.new)} label="New" accent />
+          <StatTile num={d(s?.qualified?.old)} label="Old" />
+        </div>
+      </QuadCard>
+
+      <QuadCard color="#f97316" Icon={IconFollowUp} title="Follow Up" to="/follow-ups">
+        <div className="quad-stats">
+          <StatTile num={d(s?.follow_up?.new)} label="New" accent />
+          <StatTile num={d(s?.follow_up?.old)} label="Old" />
+        </div>
+      </QuadCard>
+
+      {/* ── Row 2 ── */}
+      <QuadCard color="#6366f1" Icon={IconVisit} title="Visit Scheduled" to="/visit-scheduled">
+        <div className="quad-stats cols-1">
+          <div>
+            <div className="stat-row">
+              <span className="sr-lbl"><span className="stage-dot" style={{ background: '#16a34a' }} />Visit Completed</span>
+              <span className="sr-num">{d(s?.visit?.completed)}</span>
+            </div>
+            <div className="stat-row">
+              <span className="sr-lbl"><span className="stage-dot" style={{ background: '#6366f1' }} />To be Completed</span>
+              <span className="sr-num">{d(s?.visit?.to_be_completed)}</span>
+            </div>
+            <div className="stat-row">
+              <span className="sr-lbl"><span className="stage-dot" style={{ background: '#f97316' }} />Overdue</span>
+              <span className="sr-num" style={{ color: '#f97316' }}>{d(s?.visit?.overdue)}</span>
+            </div>
           </div>
         </div>
       </QuadCard>
 
-      <QuadCard color="#6366f1" Icon={IconPipeline} title="Supply Closure Tracker" to="/pipeline">
+      <QuadCard color="#0ea5e9" Icon={IconPipeline} title="Supply Closure Tracker" to="/pipeline">
         <div className="quad-stats cols-1">
           <div>
             {SUPPLY_STAGES.map((st) => (
@@ -119,6 +162,17 @@ function BoardView() {
 
 export default function Home() {
   const [view, setView] = useState('board'); // board | table
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    api.get('/api/home/summary')
+      .then((r) => { if (alive) setSummary(r); })
+      .catch(() => { if (alive) setSummary(null); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
 
   const toggle = (
     <div className="view-toggle">
@@ -129,13 +183,16 @@ export default function Home() {
 
   return (
     <div>
+      {/* Board/Table toggle pinned to the page's top-right, same spot in both views. */}
+      <div className="home-viewbar">{toggle}</div>
       {view === 'board' ? (
         <>
-          <div className="page-head"><h2>Summary</h2><div className="page-head-spacer" />{toggle}</div>
-          <BoardView />
+          <TodaysTask task={summary?.todays_task} loading={loading} />
+          <div className="page-head"><h2>Summary</h2></div>
+          <BoardView s={summary} loading={loading} />
         </>
       ) : (
-        <InventoryBoard toolbarExtra={toggle}
+        <InventoryBoard showReasonCol
           extraStageGroups={[{ key: 'post_visit', label: 'Post Visit', stages: SUPPLY_STAGES, color: '#6366f1', before: 'rejected' }]} />
       )}
     </div>

@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client.js';
 import { stageLabel } from '../utils/format.js';
 
-const STAGE_ORDER = ['unqualified', 'qualified', 'call_not_received', 'follow_up', 'visit_scheduled', 'visit_completed', 'offer_given', 'rejected'];
+const STAGE_ORDER = ['lead', 'active', 'qualified', 'call_not_received', 'follow_up', 'visit_scheduled', 'visit_completed', 'offer_given', 'rejected'];
 const FUNNEL_STAGES = ['qualified', 'visit_scheduled', 'visit_completed', 'offer_given'];
 const STAGE_COLOR = {
-  unqualified: '#fa541c', qualified: '#16a34a', call_not_received: '#EF9F27', follow_up: '#f97316',
+  lead: '#fa541c', active: '#f59e0b', qualified: '#16a34a', call_not_received: '#EF9F27', follow_up: '#f97316',
   visit_scheduled: '#a855f7', visit_completed: '#639922', offer_given: '#BA7517', rejected: '#cbd5e1',
 };
 function sortStages(keys) {
