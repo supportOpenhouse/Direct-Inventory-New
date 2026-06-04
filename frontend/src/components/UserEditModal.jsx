@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api } from '../api/client.js';
+import { foldCities } from '../utils/format.js';
 import SearchableMultiSelect from './SearchableMultiSelect.jsx';
 import { IconClose } from './icons.jsx';
 
@@ -10,7 +11,7 @@ const SCOPE_LEVELS = [
 ];
 
 export default function UserEditModal({ user, managers, areas, onClose, onSaved }) {
-  const [cities, setCities] = useState(user.cities || []);
+  const [cities, setCities] = useState(foldCities(user.cities));
   const [microMarkets, setMicroMarkets] = useState(user.micro_market || []);
   const [societies, setSocieties] = useState(user.society || []);
   const [manager, setManager] = useState(user.manager || '');
@@ -20,7 +21,7 @@ export default function UserEditModal({ user, managers, areas, onClose, onSaved 
 
   const valueFor = { city: cities, micro_market: microMarkets, society: societies };
   const setterFor = { city: setCities, micro_market: setMicroMarkets, society: setSocieties };
-  const optionsFor = { city: areas.cities || [], micro_market: areas.micro_markets || [], society: areas.societies || [] };
+  const optionsFor = { city: foldCities(areas.cities), micro_market: areas.micro_markets || [], society: areas.societies || [] };
 
   async function save() {
     setError(null); setSaving(true);

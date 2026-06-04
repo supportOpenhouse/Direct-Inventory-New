@@ -44,8 +44,13 @@ async function request(method, path, body) {
       body: body == null ? undefined : JSON.stringify(body),
     });
   } catch {
-    // Network unreachable (no backend yet) → fall back to mocks.
-    return fromMock(method, path, body);
+    // Real backend selected but unreachable. Do NOT fall back to mocks here —
+    // for writes that would fake success and silently drop the change (e.g. a
+    // qualify that never reaches the DB). Surface the error so optimistic UI can
+    // revert/retry. (Set VITE_USE_MOCKS=true for the no-backend mock dev mode.)
+    const err = new Error('Network error — could not reach the server. Please retry.');
+    err.status = 0;
+    throw err;
   }
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;

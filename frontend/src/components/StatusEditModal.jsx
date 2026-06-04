@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { api } from '../api/client.js';
-import { REJECT_REASONS, STAGE_DOT_COLOR, STAGES, stageLabel, todayISO } from '../utils/format.js';
+import { rejectReasonsForStage, STAGE_DOT_COLOR, STAGES, stageLabel, todayISO } from '../utils/format.js';
 import { IconClose } from './icons.jsx';
 import VisitScheduleModal from './VisitScheduleModal.jsx';
 
@@ -15,7 +15,7 @@ import VisitScheduleModal from './VisitScheduleModal.jsx';
 export default function StatusEditModal({ item, onUpdated, onClose }) {
   const [stage, setStage] = useState(item.stage);
   const [followUp, setFollowUp] = useState(item.follow_up_at ? item.follow_up_at.slice(0, 10) : '');
-  const [reason, setReason] = useState(item.reject_reason || '');
+  const [reason, setReason] = useState(item.stage_reason || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [showVisit, setShowVisit] = useState(false);
@@ -29,7 +29,7 @@ export default function StatusEditModal({ item, onUpdated, onClose }) {
     if (needsVisit) { setShowVisit(true); return; }
     if (needsReason && !reason) { setError('Pick a reject reason'); return; }
     const body = { stage };
-    if (needsReason) body.reject_reason = reason;
+    if (needsReason) body.stage_reason = reason;
     if (needsDate) body.follow_up_at = followUp || null;
     try {
       setSaving(true);
@@ -75,7 +75,10 @@ export default function StatusEditModal({ item, onUpdated, onClose }) {
               <label>Reject reason <span className="req">*</span></label>
               <select value={reason} onChange={(e) => setReason(e.target.value)}>
                 <option value="">— choose —</option>
-                {REJECT_REASONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                {/* Reason set depends on the lead's CURRENT stage: an unqualified
+                    intake lead uses listing-quality reasons; a worked lead uses
+                    the engagement reasons. */}
+                {rejectReasonsForStage(item.stage).map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
               </select>
             </div>
           )}

@@ -67,7 +67,7 @@ export function isCreatedToday(iso) {
 export function rowFlag(item) {
   if (!item) return null;
   if (item.stage === 'follow_up' && isDateBeforeToday(item.follow_up_at)) return 'yellow';
-  if (item.stage === 'lead' || item.stage === 'qualified') {
+  if (item.stage === 'unqualified' || item.stage === 'qualified') {
     const d = daysAgo(item.created_at);
     if (d != null && d >= 1) return 'red';
   }
@@ -86,13 +86,20 @@ export function formatDateRel(iso) {
 
 export function stageLabel(s) {
   return ({
-    lead: 'Lead',
+    unqualified: 'Unqualified',
     qualified: 'Qualified',
     call_not_received: 'Call Not Received',
     follow_up: 'Follow Up',
     visit_scheduled: 'Visit Scheduled',
     rejected: 'Rejected',
+    // Supply Closure Tracker stages (post-visit acquisition funnel).
+    pipeline: 'Pipeline',
+    token_to_ama: 'Token to AMA',
+    onboarded: 'Onboarded',
+    rejected_post_visit: 'Rejected Post Visit',
+    cancelled_post_token: 'Cancelled Post Token',
     // Legacy labels — kept so historical activity-log rows still render.
+    lead: 'Unqualified',
     follow_up_cnr: 'Follow Up (CNR)',
     visit_completed: 'Visit Completed',
     offer_given: 'Offer Given',
@@ -100,11 +107,14 @@ export function stageLabel(s) {
   })[s] || s;
 }
 
-// Board-visible stages, in display order. `lead` = unacted intake (Leads
-// page, left column); `qualified` = acted (right column). Drives count pills,
-// stage dropdowns, and analytics order.
+// Board-visible stages, in display + flow order. `unqualified` = unacted intake
+// (Leads page, left column); `qualified` = acted (right column). Drives count
+// pills, stage dropdowns, and analytics order.
+//   unqualified -> qualified -> {call_not_received, follow_up,
+//                                visit_scheduled, rejected}
+//   {call_not_received, follow_up} -> {visit_scheduled, rejected}
 export const STAGES = [
-  'lead',
+  'unqualified',
   'qualified',
   'call_not_received',
   'follow_up',
@@ -113,30 +123,112 @@ export const STAGES = [
 ];
 
 export const STAGE_DOT_COLOR = {
-  lead: '#fa541c',
+  unqualified: '#fa541c',
   qualified: '#16a34a',
   call_not_received: '#facc15',
   follow_up: '#f97316',
   visit_scheduled: '#a855f7',
   rejected: '#ef4444',
+  // Supply Closure Tracker stages
+  pipeline: '#0ea5e9',
+  token_to_ama: '#8b5cf6',
+  onboarded: '#16a34a',
+  rejected_post_visit: '#ef4444',
+  cancelled_post_token: '#64748b',
   // Legacy
+  lead: '#fa541c',
   follow_up_cnr: '#facc15',
   visit_completed: '#22c55e',
   offer_given: '#fb923c',
   unreachable: '#94a3b8',
 };
 
-// Reject reasons for the Leads flow. Written to inventory.reject_reason
-// alongside stage='rejected'.
-export const REJECT_REASONS = [
+// ── Supply Closure Tracker (post-visit acquisition funnel) ───────────────────
+// Synced from PROPERTIES_DB.cp_inventory_status: direct_stage → inventory.stage,
+// supply_status → inventory.stage_reason (both slugified, e.g. "Token to AMA"
+// → "token_to_ama"). These stages live alongside the lead stages.
+export const SUPPLY_STAGES = ['pipeline', 'token_to_ama', 'onboarded', 'rejected_post_visit', 'cancelled_post_token'];
+
+export const SUPPLY_STAGE_REASONS = {
+  pipeline: [
+    { value: 'visit_completed', label: 'Visit Completed' },
+    { value: 'followup', label: 'Followup' },
+    { value: 'negotiation', label: 'Negotiation' },
+    { value: 'hold', label: 'Hold' },
+    { value: 'future_prospect', label: 'Future Prospect' },
+  ],
+  token_to_ama: [
+    { value: 'token_requested', label: 'Token Requested' },
+    { value: 'token_transferred', label: 'Token Transferred' },
+    { value: 'ama_req', label: 'AMA Req' },
+    { value: 'ama_signed', label: 'AMA Signed' },
+  ],
+  onboarded: [
+    { value: 'key_handover', label: 'Key Handover' },
+    { value: 'listed', label: 'Listed' },
+  ],
+  rejected_post_visit: [
+    { value: 'duplicacy', label: 'Duplicacy' },
+    { value: 'dead_sold', label: 'Dead - Sold' },
+    { value: 'oh_rejected', label: 'OH Rejected' },
+    { value: 'dead_not_interested', label: 'Dead - Not Interested' },
+    { value: 'seller_rejected', label: 'Seller Rejected' },
+    { value: 'dead_legal', label: 'Dead - Legal' },
+  ],
+  cancelled_post_token: [
+    { value: 'cancelled_post_token', label: 'Cancelled Post Token' },
+  ],
+};
+
+export const ALL_SUPPLY_REASONS = Object.values(SUPPLY_STAGE_REASONS).flat();
+
+export function supplyReasonLabel(code) {
+  if (!code) return '';
+  return ALL_SUPPLY_REASONS.find((r) => r.value === code)?.label
+    || code.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// Reject reasons come in two context sets, both written to
+// inventory.stage_reason alongside stage='rejected':
+//   - UNQUALIFIED_REJECT_REASONS — shown when rejecting an unqualified/intake
+//     lead (listing-quality reasons).
+//   - REJECT_REASONS — shown when rejecting from a worked stage (qualified /
+//     call_not_received / follow_up / visit_scheduled). These are the
+//     engagement reasons already present in the live DB.
+// A duplicate listing uses the SAME `invalid_duplicate` value in both contexts
+// (the older intake-only `duplicate` value was folded into it) so it lands in a
+// single category in breakdowns/reports.
+export const UNQUALIFIED_REJECT_REASONS = [
   { value: 'ground_floor', label: 'Ground Floor' },
   { value: 'listing_removed', label: 'Listing Removed' },
-  { value: 'duplicate', label: 'Duplicate' },
+  { value: 'invalid_duplicate', label: 'Invalid / Duplicate' },
 ];
+
+export const REJECT_REASONS = [
+  { value: 'not_interested', label: 'Not Interested' },
+  { value: 'invalid_duplicate', label: 'Invalid / Duplicate' },
+  { value: 'future_prospect', label: 'Future Prospect' },
+  { value: 'oh_rejected', label: 'OH Rejected' },
+  { value: 'sold', label: 'Sold' },
+  { value: 'broker_listing', label: 'Broker Listing' },
+];
+
+// Every reject reason across both contexts, de-duplicated by value (the two
+// contexts share `invalid_duplicate`) — for breakdowns / labels that need to
+// cover whatever value a row actually carries.
+export const ALL_REJECT_REASONS = [...UNQUALIFIED_REJECT_REASONS, ...REJECT_REASONS]
+  .filter((r, i, arr) => arr.findIndex((x) => x.value === r.value) === i);
+
+// Pick the reason list for the lead's CURRENT stage: an unqualified/intake lead
+// uses the listing-quality reasons; anything already worked uses the rest.
+export function rejectReasonsForStage(stage) {
+  return stage === 'unqualified' ? UNQUALIFIED_REJECT_REASONS : REJECT_REASONS;
+}
 
 export function rejectReasonLabel(code) {
   if (!code) return '';
-  return REJECT_REASONS.find((r) => r.value === code)?.label || code;
+  const all = [...UNQUALIFIED_REJECT_REASONS, ...REJECT_REASONS];
+  return all.find((r) => r.value === code)?.label || code;
 }
 
 // Greater Noida is rolled up into Noida everywhere in the UI.
@@ -145,6 +237,12 @@ export function displayCity(city) {
   if (!city) return '';
   if (city === 'Greater Noida') return 'Noida';
   return city;
+}
+
+// Roll any 'Greater Noida' into 'Noida' across a list of city names and dedupe,
+// so 'Greater Noida' is never offered or stored as a separate city.
+export function foldCities(list) {
+  return [...new Set((list || []).map(displayCity).filter(Boolean))];
 }
 
 export const MANUAL_SOURCES = new Set(['Website', 'manual']);

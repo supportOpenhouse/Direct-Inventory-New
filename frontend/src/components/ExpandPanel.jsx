@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import NoteThread from './NoteThread.jsx';
 import StatusEditModal from './StatusEditModal.jsx';
-import { formatDateShort, formatPrice, STAGE_DOT_COLOR, stageLabel, variation } from '../utils/format.js';
+import { formatDateShort, formatPrice, STAGE_DOT_COLOR, stageLabel, supplyReasonLabel, variation } from '../utils/format.js';
 
 function Field({ label, children }) {
   return (
@@ -17,11 +17,11 @@ function Field({ label, children }) {
  * Distributed columns: Property Details · Pricing · Seller Details · Notes.
  * `sections` lets a host trim what's shown (Leads keeps it lean).
  */
-export default function ExpandPanel({ item, role, onUpdated, canPost = true, sections }) {
+export default function ExpandPanel({ item, role, onUpdated, canPost = true, sections, canEditStatus = true }) {
   const show = sections || ['property', 'pricing', 'seller', 'notes'];
   const v = variation(item.price, item.oh_price);
   const listing = item.listing_link && !/^internal:\/\//.test(item.listing_link) ? item.listing_link : null;
-  const canEdit = ['admin', 'manager', 'rm'].includes(role) || canPost;
+  const canEdit = canEditStatus && (['admin', 'manager', 'rm'].includes(role) || canPost);
   const [showStatus, setShowStatus] = useState(false);
 
   return (
@@ -78,6 +78,7 @@ export default function ExpandPanel({ item, role, onUpdated, canPost = true, sec
             <span className="expand-status-cur">
               <span className="stage-dot" style={{ background: STAGE_DOT_COLOR[item.stage] }} />
               {stageLabel(item.stage)}
+              {item.stage_reason && <span className="muted"> · {supplyReasonLabel(item.stage_reason)}</span>}
             </span>
             {canEdit && (
               <button type="button" className="btn-soft btn-edit-status" onClick={() => setShowStatus(true)}>✎ Edit Status</button>

@@ -8,9 +8,12 @@ const S = ({ children, size = 18, fill = 'none' }) => (
 );
 
 export const IconHome = (p) => <S {...p}><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V21h14V9.5" /><path d="M9.5 21v-6h5v6" /></S>;
-export const IconLeads = (p) => <S {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></S>;
+// Siren / beacon — alert vibe (🚨) in the same stroke style as the set.
+export const IconLeads = (p) => <S {...p}><path d="M5 18h14" /><path d="M7 18a5 5 0 0 1 10 0" /><path d="M12 13V9" /><path d="M12 9 9.5 6M12 9l2.5-3" /></S>;
 export const IconFollowUp = (p) => <S {...p}><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></S>;
-export const IconPipeline = (p) => <S {...p}><path d="M3 5h18M6 5v6a6 6 0 0 0 12 0V5" /><path d="M9 19h6M12 17v2" /></S>;
+export const IconVisit = (p) => <S {...p}><path d="M12 21s-6-5.3-6-10a6 6 0 0 1 12 0c0 4.7-6 10-6 10Z" /><circle cx="12" cy="11" r="2" /></S>;
+// Abacus (🧮) — Supply Closure Tracker.
+export const IconPipeline = (p) => <S {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18M3 14.5h18" /><circle cx="7" cy="6.5" r="1.2" /><circle cx="10.5" cy="6.5" r="1.2" /><circle cx="14" cy="11.75" r="1.2" /><circle cx="17.5" cy="11.75" r="1.2" /><circle cx="7" cy="17.25" r="1.2" /><circle cx="10.5" cy="17.25" r="1.2" /></S>;
 export const IconToken = (p) => <S {...p}><circle cx="12" cy="12" r="9" /><path d="M12 7v10M9 9.5h4.5a1.5 1.5 0 0 1 0 3H9h5" /></S>;
 export const IconRejected = (p) => <S {...p}><circle cx="12" cy="12" r="9" /><path d="m15 9-6 6M9 9l6 6" /></S>;
 export const IconReport = (p) => <S {...p}><path d="M3 3v18h18" /><rect x="7" y="11" width="3" height="6" /><rect x="12" y="7" width="3" height="10" /><rect x="17" y="13" width="3" height="4" /></S>;

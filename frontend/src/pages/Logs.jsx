@@ -7,11 +7,20 @@ function formatTs(iso) {
   return `${d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}, ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}`;
 }
 function categoryClass(t) {
-  return ({ auth: 'cat-pill cat-auth', inventory: 'cat-pill cat-inventory', user: 'cat-pill cat-user', sync: 'cat-pill cat-sync' })[t] || 'cat-pill cat-default';
+  return ({ auth: 'cat-pill cat-auth', inventory: 'cat-pill cat-inventory', user: 'cat-pill cat-user', sync: 'cat-pill cat-sync', cp_match_scan: 'cat-pill cat-sync' })[t] || 'cat-pill cat-default';
 }
 
 function Details({ row }) {
-  const { field, before_value, after_value, metadata, action } = row;
+  const { field, before_value, after_value, metadata, action, entity_type } = row;
+  // CP Inventory match scan run — summarise the per-verdict counts.
+  if (entity_type === 'cp_match_scan' && metadata && typeof metadata === 'object') {
+    return (
+      <div>
+        <div className="det-change"><strong>CP match scan</strong> · {metadata.total ?? '?'} rows</div>
+        <div className="det-sub">perfect {metadata.perfect ?? 0} · partial {metadata.partial ?? 0} · no match {metadata.no_match ?? 0}</div>
+      </div>
+    );
+  }
   if (field && (before_value != null || after_value != null) && action !== 'note_added') {
     return (
       <div><div className="det-change"><span className="det-before">{before_value ?? '—'}</span><span className="det-arrow"> → </span><span className="det-after">{after_value ?? '—'}</span></div><div className="det-sub">Field: <code>{field}</code></div></div>
@@ -52,10 +61,10 @@ export default function Logs() {
 
   return (
     <div>
-      <div className="al-head"><div><h2 className="al-title">Activity Logs</h2><div className="al-subtitle">All dashboard activity</div></div><div className="al-result-count">{total} result{total === 1 ? '' : 's'}</div></div>
+      <div className="al-head"><div><div className="al-subtitle">All dashboard activity</div></div><div className="al-result-count">{total} result{total === 1 ? '' : 's'}</div></div>
 
       <div className="al-filters">
-        <input className="al-filter-input" placeholder="Search by UID…" value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && refresh()} />
+        <input className="al-filter-input" placeholder="Search actor, action, UID, details…" value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && refresh()} />
         <select className="al-filter-select" value={f.action} onChange={(e) => setF({ ...f, action: e.target.value })}><option value="">Action</option>{opts.actions.map((a) => <option key={a} value={a}>{a}</option>)}</select>
         <select className="al-filter-select" value={f.entity_type} onChange={(e) => setF({ ...f, entity_type: e.target.value })}><option value="">Category</option>{opts.entity_types.map((t) => <option key={t} value={t}>{t}</option>)}</select>
         <select className="al-filter-select" value={f.actor_email} onChange={(e) => setF({ ...f, actor_email: e.target.value })}><option value="">Actor</option>{opts.actors.map((a) => <option key={a.email} value={a.email}>{a.name || a.email}</option>)}</select>

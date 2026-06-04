@@ -3,8 +3,10 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { useTheme } from '../contexts/ThemeContext.jsx';
 import NotificationBell from './NotificationBell.jsx';
+import CpScanButton from './CpScanButton.jsx';
+import ReassignLeadsButton from './ReassignLeadsButton.jsx';
 import {
-  IconHome, IconLeads, IconFollowUp, IconPipeline, IconToken, IconRejected,
+  IconHome, IconLeads, IconFollowUp, IconVisit, IconPipeline, IconRejected,
   IconReport, IconUsers, IconLogs, IconSun, IconMoon, IconMenu, IconLogout, IconChevron,
 } from './icons.jsx';
 
@@ -12,15 +14,16 @@ const PRIMARY = [
   { to: '/', label: 'Home', Icon: IconHome, end: true },
   { to: '/leads', label: 'Leads', Icon: IconLeads },
   { to: '/follow-ups', label: 'Follow Ups', Icon: IconFollowUp },
-  { to: '/pipeline', label: 'Pipeline', Icon: IconPipeline },
-  { to: '/post-token', label: 'Post Token', Icon: IconToken },
+  { to: '/visit-scheduled', label: 'Visit Scheduled', Icon: IconVisit },
+  { to: '/pipeline', label: 'Supply Closure Tracker', Icon: IconPipeline },
   { to: '/rejected', label: 'Rejected', Icon: IconRejected },
 ];
 
 const TITLES = {
-  '': 'Home', leads: 'Leads', 'follow-ups': 'Follow Ups', pipeline: 'Pipeline',
+  '': 'Home', leads: 'Leads', 'follow-ups': 'Follow Ups', 'visit-scheduled': 'Visit Scheduled',
+  pipeline: 'Supply Closure Tracker',
   'post-token': 'Post Token', rejected: 'Rejected', report: 'Report',
-  'my-report': 'My Report', users: 'Users', logs: 'Activity Logs',
+  'my-report': 'My Report', users: 'Users', logs: 'Activity Logs', profile: 'My Profile',
 };
 
 function initials(name, email) {
@@ -90,13 +93,13 @@ export default function Layout() {
 
         <div className="nav-spacer" />
         <div className="sidebar-foot">
-          <div className="sidebar-user">
+          <button type="button" className="sidebar-user" onClick={() => { nav('/profile'); setMobileOpen(false); }} title="My profile">
             <span className="avatar">{initials(user?.name, user?.email)}</span>
             <div className="su-text">
               <div className="su-name">{user?.name || user?.email}</div>
               <div className="su-role">{user?.role}</div>
             </div>
-          </div>
+          </button>
         </div>
       </aside>
 
@@ -107,6 +110,8 @@ export default function Layout() {
           <button className="icon-btn topbar-menu" onClick={() => setMobileOpen(true)} aria-label="Menu"><IconMenu /></button>
           <h1>{title}</h1>
           <div className="topbar-spacer" />
+          {(seg === '' || seg === 'leads') && <CpScanButton />}
+          {seg === 'users' && isAdmin && <ReassignLeadsButton />}
           <NotificationBell role={user?.role} />
           <button className="icon-btn" onClick={toggle} aria-label="Toggle theme" title={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}>
             {theme === 'dark' ? <IconSun /> : <IconMoon />}

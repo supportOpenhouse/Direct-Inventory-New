@@ -53,19 +53,19 @@ export default function Users() {
 
   return (
     <div>
-      <div className="page-head"><div><h2>Users</h2><div className="ph-sub">Roles, managers, and area scope.</div></div></div>
-
       <div className="card-block">
         <h3>Add user</h3>
-        <div className="form-grid">
-          <div><label>Email</label><input value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} placeholder="someone@openhouse.in" /></div>
-          <div><label>Name</label><input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></div>
-          <div><label>Phone</label><input value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} /></div>
-          <div><label>Role</label><select className="role-select" value={draft.role} onChange={(e) => setRole(e.target.value)}>{ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}</select></div>
-          <div className="form-wide"><label>Cities</label><div className="city-pills">{CITIES.map((c) => <button key={c} type="button" className={draft.cities.includes(c) ? 'pill pill-on' : 'pill'} onClick={() => toggleCity(c)}>{c}</button>)}</div></div>
+        <div className="adduser-row">
+          <div className="au-field"><label>Email</label><input type="text" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} placeholder="someone@openhouse.in" /></div>
+          <div className="au-field"><label>Name</label><input type="text" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></div>
+          <div className="au-field"><label>Phone</label><input type="tel" value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} /></div>
+        </div>
+        <div className="adduser-row">
+          <div className="au-role"><label>Role</label><select className="role-select" value={draft.role} onChange={(e) => setRole(e.target.value)}>{ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}</select></div>
+          <div className="au-field"><label>Cities</label><div className="city-pills">{CITIES.map((c) => <button key={c} type="button" className={draft.cities.includes(c) ? 'pill pill-on' : 'pill'} onClick={() => toggleCity(c)}>{c}</button>)}</div></div>
+          <div className="au-actions"><button className="btn-primary" onClick={add}>Add user</button></div>
         </div>
         {error && <div className="modal-error">{error}</div>}
-        <div className="modal-actions"><button className="btn-primary" onClick={add}>Add user</button></div>
         <p className="page-hint">After adding, click Edit to set manager and area scope.</p>
       </div>
 
@@ -89,7 +89,7 @@ export default function Users() {
                   <td>{u.phone || '—'}</td>
                   <td><select className="role-select" value={u.role} onChange={(e) => patch(u.id, { role: e.target.value })}>{ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}</select></td>
                   <td>{u.manager_name || u.manager_email || <em className="muted">—</em>}</td>
-                  <td>{scopeSummary(u)}</td>
+                  <td><span className="usr-scope" title={scopeSummary(u)}>{scopeSummary(u)}</span></td>
                   <td><button className="btn-edit" onClick={() => setEditUser(u)}>✎ Edit</button></td>
                 </tr>
               ))}

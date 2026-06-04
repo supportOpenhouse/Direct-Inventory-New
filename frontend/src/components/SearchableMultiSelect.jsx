@@ -20,6 +20,7 @@ export default function SearchableMultiSelect({
   const [pos, setPos] = useState(null);
   const btnRef = useRef(null);
   const menuRef = useRef(null);
+  const inputRef = useRef(null);
 
   const computePos = useCallback(() => {
     const btn = btnRef.current;
@@ -49,9 +50,9 @@ export default function SearchableMultiSelect({
     function onDoc(e) {
       if (btnRef.current?.contains(e.target)) return;
       if (menuRef.current?.contains(e.target)) return;
-      setOpen(false);
+      setOpen(false); setQuery('');
     }
-    function onKey(e) { if (e.key === 'Escape') setOpen(false); }
+    function onKey(e) { if (e.key === 'Escape') { setOpen(false); setQuery(''); } }
     document.addEventListener('mousedown', onDoc);
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
@@ -74,7 +75,6 @@ export default function SearchableMultiSelect({
   const menu = open && !disabled && pos
     ? createPortal(
         <div ref={menuRef} className="sms-menu" style={{ position: 'fixed', left: pos.left, top: pos.top, width: pos.width, maxHeight: pos.maxHeight }}>
-          <input className="sms-search" placeholder="Search…" value={query} onChange={(e) => setQuery(e.target.value)} autoFocus />
           {selectedCount > 0 && (
             <button type="button" className="sms-clear" onClick={() => { onChange(single ? '' : []); if (single) setOpen(false); }}>
               {single ? 'Clear selection' : `Clear ${selectedCount} selected`}
@@ -101,12 +101,29 @@ export default function SearchableMultiSelect({
       )
     : null;
 
+  function toggle() {
+    setOpen((s) => {
+      const next = !s;
+      if (next) { setTimeout(() => inputRef.current?.focus(), 0); } else { setQuery(''); }
+      return next;
+    });
+  }
+
   return (
     <div className={`sms ${disabled ? 'sms-disabled' : ''}`}>
-      <button type="button" ref={btnRef} className="sms-btn" disabled={disabled} onClick={() => setOpen((s) => !s)}>
-        <span className={selectedCount ? '' : 'sms-placeholder'}>{label}</span>
-        <span className="sms-caret">▾</span>
-      </button>
+      <div ref={btnRef} className="sms-control">
+        <input
+          ref={inputRef}
+          type="text"
+          className="sms-input"
+          disabled={disabled}
+          value={query}
+          placeholder={label}
+          onFocus={() => setOpen(true)}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+        />
+        <span className="sms-caret" role="button" tabIndex={-1} onMouseDown={(e) => { e.preventDefault(); if (!disabled) toggle(); }}>▾</span>
+      </div>
       {menu}
       {!single && selectedCount > 0 && (
         <div className="sms-chips">

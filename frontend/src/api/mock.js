@@ -93,7 +93,7 @@ function seedInventory() {
           oh_price_bhk: bedrooms,
           oh_price_area: area,
           stage,
-          reject_reason: stage === 'rejected' ? ['ground_floor', 'listing_removed', 'duplicate'][n % 3] : null,
+          stage_reason: stage === 'rejected' ? ['ground_floor', 'listing_removed', 'invalid_duplicate'][n % 3] : null,
           seller_name: sellerName,
           seller_phone: sellerPhone,
           source: SOURCES[n % SOURCES.length],
@@ -437,7 +437,7 @@ export function mockApi(method, path, body) {
           from_stage: a.before_value || 'lead',
           final_stage: a.after_value || it.stage || 'qualified',
           current_stage: it.stage || 'qualified',
-          reject_reason: it.reject_reason,
+          stage_reason: it.stage_reason,
           last_change_at: a.created_at,
           notes: '',
         };
@@ -469,8 +469,9 @@ export function mockApi(method, path, body) {
     return { by_stage: { token_transferred: 12, docs_received: 8, ama_signed: 5, key_handover: 3 } };
   }
 
-  // Home board summary — the four quadrants. Backend should implement this as
-  // a single scoped aggregate. Computed here from the in-memory dataset.
+  // Home board summary — the Leads / Follow Ups / Rejected quadrants. (The
+  // Pipeline quadrant uses the separate post-token dataset, computed client-
+  // side.) Backend should implement this as one scoped aggregate.
   if (p === '/api/home/summary') {
     const today = todayISO();
     const created = (it) => {
@@ -480,20 +481,30 @@ export function mockApi(method, path, body) {
     };
     const fu = (it) => (it.follow_up_at || '').slice(0, 10);
     const leads = DB.inventory.filter((it) => it.stage === 'lead');
+    const quals = DB.inventory.filter((it) => it.stage === 'qualified');
+    // Follow-up time buckets, split by stage (Follow Up vs Call Not Received).
+    const bucket = (items) => ({
+      today: items.filter((it) => fu(it) === today).length,
+      past: items.filter((it) => fu(it) < today).length,
+      future: items.filter((it) => fu(it) > today).length,
+    });
+    const fuStage = DB.inventory.filter((it) => it.stage === 'follow_up' && it.follow_up_at);
+    const cnrStage = DB.inventory.filter((it) => it.stage === 'call_not_received' && it.follow_up_at);
+    const rejected = DB.inventory.filter((it) => it.stage === 'rejected');
+    const by_reason = {};
+    for (const it of rejected) { const r = it.stage_reason || 'unspecified'; by_reason[r] = (by_reason[r] || 0) + 1; }
     return {
       leads: {
-        new: leads.filter((it) => created(it) === today).length,
-        pending: leads.filter((it) => created(it) && created(it) < today).length,
+        unqualified_new: leads.filter((it) => created(it) === today).length,
+        unqualified_old: leads.filter((it) => { const c = created(it); return c && c < today; }).length,
+        qualified_new: quals.filter((it) => created(it) === today).length,
+        qualified_old: quals.filter((it) => { const c = created(it); return c && c < today; }).length,
       },
       follow_ups: {
-        today: DB.inventory.filter((it) => fu(it) === today).length,
-        pending: DB.inventory.filter((it) => it.follow_up_at && fu(it) < today).length,
+        follow_up: bucket(fuStage),
+        call_not_received: bucket(cnrStage),
       },
-      pipeline: {
-        call_not_received: DB.inventory.filter((it) => it.stage === 'call_not_received').length,
-        future_follow_ups: DB.inventory.filter((it) => it.follow_up_at && fu(it) > today).length,
-      },
-      post_token: { by_stage: { token_transferred: 12, docs_received: 8, ama_signed: 5, key_handover: 3 } },
+      rejected: { total: rejected.length, by_reason },
     };
   }
 

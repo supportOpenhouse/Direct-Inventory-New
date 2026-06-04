@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client.js';
-import { CITIES } from '../utils/format.js';
+import { ALL_REJECT_REASONS, CITIES } from '../utils/format.js';
 import SearchableMultiSelect from './SearchableMultiSelect.jsx';
 import { IconClose } from './icons.jsx';
 
@@ -16,21 +16,41 @@ function presetRange(name) {
   return { from: '', to: '' };
 }
 
+const STAR_OPTIONS = [
+  { key: 'partial', label: 'Partial', color: '#dc2626' },
+  { key: 'perfect', label: 'Perfect', color: '#16a34a' },
+  { key: 'important', label: 'Important', color: '#eab308' },
+  { key: 'blank', label: 'Blank', color: '#cbd5e1' },
+];
+
+const DATE_PRESETS = [
+  ['today', 'Today'], ['yesterday', 'Yesterday'], ['this_week', 'This Week'],
+  ['this_month', 'This Month'], ['custom', 'Custom'], ['empty', 'Empty'],
+];
+
 const EMPTY = {
-  society: [], locality: [], bhk: [],
+  society: [], locality: [], bhk: [], star: [], reason: [],
   price_min: '', price_max: '', variation_min: '', variation_max: '',
-  source: '', date_preset: '', posting_from: '', posting_to: '',
+  source: '', rm_id: '',
+  date_preset: '', posting_from: '', posting_to: '', posting_empty: false,
+  fu_preset: '', follow_up_from: '', follow_up_to: '', follow_up_empty: false,
 };
 
-export default function FilterPanel({ initial, defaultCity = '', onApply, onClose }) {
+export default function FilterPanel({ initial, defaultCity = '', role = '', showReason = false, showFollowUp = true, reasonOptions = ALL_REJECT_REASONS, onApply, onClose }) {
   const [f, setF] = useState(() => ({
     ...EMPTY, ...initial,
     society: Array.isArray(initial?.society) ? initial.society : [],
     locality: Array.isArray(initial?.locality) ? initial.locality : [],
     bhk: Array.isArray(initial?.bhk) ? initial.bhk : [],
+    star: Array.isArray(initial?.star) ? initial.star : [],
+    reason: Array.isArray(initial?.reason) ? initial.reason : [],
+    rm_id: initial?.rm_id != null && initial?.rm_id !== '' ? String(initial.rm_id) : '',
   }));
   const [societies, setSocieties] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  const canFilterRm = role === 'admin' || role === 'manager';
+  const [rms, setRms] = useState([]);
 
   useEffect(() => {
     let alive = true;
@@ -43,16 +63,45 @@ export default function FilterPanel({ initial, defaultCity = '', onApply, onClos
     return () => { alive = false; };
   }, [defaultCity]);
 
+  useEffect(() => {
+    if (!canFilterRm) return undefined;
+    let alive = true;
+    api.get('/api/users?role=rm')
+      .then((r) => { if (alive) setRms((r.items || []).filter((u) => u.is_active !== false)); })
+      .catch(() => { if (alive) setRms([]); });
+    return () => { alive = false; };
+  }, [canFilterRm]);
+
   const societyOptions = useMemo(() => [...new Set(societies.map((s) => s.society).filter(Boolean))].sort(), [societies]);
   const localityOptions = useMemo(() => [...new Set(societies.map((s) => (s.locality || '').trim()).filter(Boolean))].sort(), [societies]);
 
   function set(k, v) { setF((p) => ({ ...p, [k]: v })); }
   function toggleBhk(n) { setF((p) => ({ ...p, bhk: p.bhk.includes(n) ? p.bhk.filter((x) => x !== n) : [...p.bhk, n] })); }
+  function toggleStar(key) { setF((p) => ({ ...p, star: p.star.includes(key) ? p.star.filter((x) => x !== key) : [...p.star, key] })); }
+  function toggleReason(key) { setF((p) => ({ ...p, reason: p.reason.includes(key) ? p.reason.filter((x) => x !== key) : [...p.reason, key] })); }
+
   function applyPreset(name) {
     setF((p) => {
-      if (p.date_preset === name) return { ...p, date_preset: '', posting_from: '', posting_to: '' };
+      if (name === 'custom') return { ...p, date_preset: p.date_preset === 'custom' ? '' : 'custom', posting_empty: false };
+      if (name === 'empty') {
+        const on = p.date_preset === 'empty';
+        return { ...p, date_preset: on ? '' : 'empty', posting_from: '', posting_to: '', posting_empty: !on };
+      }
+      if (p.date_preset === name) return { ...p, date_preset: '', posting_from: '', posting_to: '', posting_empty: false };
       const { from, to } = presetRange(name);
-      return { ...p, date_preset: name, posting_from: from, posting_to: to };
+      return { ...p, date_preset: name, posting_from: from, posting_to: to, posting_empty: false };
+    });
+  }
+  function applyFuPreset(name) {
+    setF((p) => {
+      if (name === 'custom') return { ...p, fu_preset: p.fu_preset === 'custom' ? '' : 'custom', follow_up_empty: false };
+      if (name === 'empty') {
+        const on = p.fu_preset === 'empty';
+        return { ...p, fu_preset: on ? '' : 'empty', follow_up_from: '', follow_up_to: '', follow_up_empty: !on };
+      }
+      if (p.fu_preset === name) return { ...p, fu_preset: '', follow_up_from: '', follow_up_to: '', follow_up_empty: false };
+      const { from, to } = presetRange(name);
+      return { ...p, fu_preset: name, follow_up_from: from, follow_up_to: to, follow_up_empty: false };
     });
   }
   function reset() { setF(EMPTY); }
@@ -62,13 +111,20 @@ export default function FilterPanel({ initial, defaultCity = '', onApply, onClos
     if (f.society.length) out.society = f.society.join(',');
     if (f.locality.length) out.locality = f.locality.join(',');
     if (f.bhk.length) out.bhk = f.bhk.join(',');
+    if (f.star.length) out.star = f.star.join(',');
+    if (showReason && f.reason.length) out.reason = f.reason.join(',');
     if (f.price_min !== '') out.price_min = Number(f.price_min);
     if (f.price_max !== '') out.price_max = Number(f.price_max);
     if (f.variation_min !== '') out.variation_min = Number(f.variation_min);
     if (f.variation_max !== '') out.variation_max = Number(f.variation_max);
     if (f.source) out.source = f.source;
+    if (canFilterRm && f.rm_id) out.rm_id = (f.rm_id === 'none' || f.rm_id === 'multiple') ? f.rm_id : Number(f.rm_id);
     if (f.posting_from) out.posting_from = f.posting_from;
     if (f.posting_to) out.posting_to = f.posting_to;
+    if (f.posting_empty) out.posting_empty = 1;
+    if (f.follow_up_from) out.follow_up_from = f.follow_up_from;
+    if (f.follow_up_to) out.follow_up_to = f.follow_up_to;
+    if (f.follow_up_empty) out.follow_up_empty = 1;
     onApply(out, f);
   }
 
@@ -102,8 +158,41 @@ export default function FilterPanel({ initial, defaultCity = '', onApply, onClos
           </div>
           <div className="filter-block">
             <label>Source</label>
-            <input value={f.source} onChange={(e) => set('source', e.target.value)} placeholder="e.g. 99acres, Website" />
+            <input type="text" value={f.source} onChange={(e) => set('source', e.target.value)} placeholder="e.g. 99acres, Website" />
           </div>
+
+          <div className="filter-block">
+            <label>Star</label>
+            <div className="bhk-pills">
+              {STAR_OPTIONS.map((s) => (
+                <button key={s.key} type="button" className={f.star.includes(s.key) ? 'pill pill-on' : 'pill'} onClick={() => toggleStar(s.key)}>
+                  <span style={{ color: s.color, marginRight: 4 }}>★</span>{s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {canFilterRm && (
+            <div className="filter-block">
+              <label>RM</label>
+              <select value={f.rm_id} onChange={(e) => set('rm_id', e.target.value)}>
+                <option value="">— All RMs —</option>
+                <option value="none">No RM assigned</option>
+                <option value="multiple">Multiple RMs</option>
+                {rms.map((u) => <option key={u.id} value={String(u.id)}>{u.name || u.email}</option>)}
+              </select>
+            </div>
+          )}
+
+          {showReason && (
+            <div className="filter-block" style={{ gridColumn: '1 / -1' }}>
+              <label>Reason</label>
+              <div className="bhk-pills">
+                {reasonOptions.map((r) => (
+                  <button key={r.value} type="button" className={f.reason.includes(r.value) ? 'pill pill-on' : 'pill'} onClick={() => toggleReason(r.value)}>{r.label}</button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="filter-block">
             <label>Asking price (₹)</label>
@@ -125,9 +214,8 @@ export default function FilterPanel({ initial, defaultCity = '', onApply, onClos
           <div className="filter-block" style={{ gridColumn: '1 / -1' }}>
             <label>Date posted</label>
             <div className="preset-grid-3">
-              {[['today', 'Today'], ['yesterday', 'Yesterday'], ['this_week', 'This Week'], ['this_month', 'This Month'], ['custom', 'Custom']].map(([k, lbl]) => (
-                <button key={k} type="button" className={f.date_preset === k ? 'pill pill-on' : 'pill'}
-                  onClick={() => (k === 'custom' ? set('date_preset', f.date_preset === 'custom' ? '' : 'custom') : applyPreset(k))}>{lbl}</button>
+              {DATE_PRESETS.map(([k, lbl]) => (
+                <button key={k} type="button" className={f.date_preset === k ? 'pill pill-on' : 'pill'} onClick={() => applyPreset(k)}>{lbl}</button>
               ))}
             </div>
             {f.date_preset === 'custom' && (
@@ -138,6 +226,24 @@ export default function FilterPanel({ initial, defaultCity = '', onApply, onClos
               </div>
             )}
           </div>
+
+          {showFollowUp && (
+            <div className="filter-block" style={{ gridColumn: '1 / -1' }}>
+              <label>Follow-up date</label>
+              <div className="preset-grid-3">
+                {DATE_PRESETS.map(([k, lbl]) => (
+                  <button key={k} type="button" className={f.fu_preset === k ? 'pill pill-on' : 'pill'} onClick={() => applyFuPreset(k)}>{lbl}</button>
+                ))}
+              </div>
+              {f.fu_preset === 'custom' && (
+                <div className="range-row" style={{ marginTop: 8 }}>
+                  <input type="date" value={f.follow_up_from} onChange={(e) => set('follow_up_from', e.target.value)} />
+                  <span className="muted">to</span>
+                  <input type="date" value={f.follow_up_to} onChange={(e) => set('follow_up_to', e.target.value)} />
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="modal-actions">

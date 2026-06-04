@@ -93,7 +93,7 @@ export default function Report() {
   return (
     <div>
       <div className="al-head">
-        <div><h2 className="al-title">Report</h2><div className="al-subtitle">{isManager ? 'Your RMs — per-user stage activity. Click to drill down.' : 'Per-user summary of stage moves. Click a user to drill down.'}</div></div>
+        <div><div className="al-subtitle">{isManager ? 'Your RMs — per-user stage activity. Click to drill down.' : 'Per-user summary of stage moves. Click a user to drill down.'}</div></div>
         <div className="al-result-count">{totals.users} users · {totals.uniqueLeads} unique leads · {totals.actions} actions</div>
       </div>
 

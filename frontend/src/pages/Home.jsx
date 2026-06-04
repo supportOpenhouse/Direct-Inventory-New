@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client.js';
-import { stageLabel } from '../utils/format.js';
+import { rejectReasonLabel, stageLabel, STAGE_DOT_COLOR, SUPPLY_STAGES } from '../utils/format.js';
 import InventoryBoard from '../components/InventoryBoard.jsx';
-import { IconLeads, IconFollowUp, IconPipeline, IconToken } from '../components/icons.jsx';
+import { IconLeads, IconFollowUp, IconPipeline, IconRejected } from '../components/icons.jsx';
+
+const REJECTED_TOP = 3;
 
 function StatTile({ num, label, accent }) {
   return (
@@ -16,14 +18,14 @@ function StatTile({ num, label, accent }) {
 
 function QuadCard({ color, Icon, title, to, children }) {
   return (
-    <section className="quad-card" style={{ '--qc': color }}>
+    <Link to={to} className="quad-card" style={{ '--qc': color }}>
       <div className="quad-head">
-        <span className="qh-ic" style={{ background: `${color}1a`, color }}><Icon size={20} /></span>
+        <span className="qh-ic" style={{ color }}><Icon size={20} /></span>
         <h3>{title}</h3>
-        {to && <Link to={to} className="qh-link">View →</Link>}
+        <span className="qh-link">View →</span>
       </div>
       {children}
-    </section>
+    </Link>
   );
 }
 
@@ -41,40 +43,73 @@ function BoardView() {
   }, []);
 
   const d = (x) => (loading ? '—' : (x ?? 0));
+  const f = s?.follow_ups;
+
+  // Rejected breakdown: top 5 reasons by count, the rest folded into "Others".
+  const byReason = s?.rejected?.by_reason || {};
+  const rejRows = Object.entries(byReason)
+    .map(([value, n]) => ({ value, n, label: value === 'unspecified' ? 'Unspecified' : rejectReasonLabel(value) }))
+    .sort((a, b) => b.n - a.n);
+  const rejTop = rejRows.slice(0, REJECTED_TOP);
+  const rejOthers = rejRows.slice(REJECTED_TOP).reduce((sum, r) => sum + r.n, 0);
 
   return (
     <div className="home-quad">
       <QuadCard color="#fa541c" Icon={IconLeads} title="Leads" to="/leads">
         <div className="quad-stats">
-          <StatTile num={d(s?.leads?.new)} label="New Leads · added today" accent />
-          <StatTile num={d(s?.leads?.pending)} label="Pending Leads · older" />
+          <StatTile num={d(s?.leads?.unqualified_new)} label="Unqualified · New" accent />
+          <StatTile num={d(s?.leads?.unqualified_old)} label="Unqualified · Old" />
+          <StatTile num={d(s?.leads?.qualified_new)} label="Qualified · New" />
+          <StatTile num={d(s?.leads?.qualified_old)} label="Qualified · Old" />
         </div>
       </QuadCard>
 
       <QuadCard color="#f97316" Icon={IconFollowUp} title="Follow Ups" to="/follow-ups">
-        <div className="quad-stats">
-          <StatTile num={d(s?.follow_ups?.today)} label="Today's Follow Ups" accent />
-          <StatTile num={d(s?.follow_ups?.pending)} label="Pending · overdue" />
+        <div className="fu-matrix">
+          <div className="fu-mrow fu-mhead"><span /><span>Today</span><span className="fu-overdue">Overdue</span><span>Future</span></div>
+          <div className="fu-mrow">
+            <span className="fu-mlbl"><span className="stage-dot" style={{ background: '#f97316' }} />Follow Up</span>
+            <span>{d(f?.follow_up?.today)}</span><span className="fu-overdue">{d(f?.follow_up?.past)}</span><span>{d(f?.follow_up?.future)}</span>
+          </div>
+          <div className="fu-mrow">
+            <span className="fu-mlbl"><span className="stage-dot" style={{ background: '#facc15' }} />Call Not Received</span>
+            <span>{d(f?.call_not_received?.today)}</span><span className="fu-overdue">{d(f?.call_not_received?.past)}</span><span>{d(f?.call_not_received?.future)}</span>
+          </div>
         </div>
       </QuadCard>
 
-      <QuadCard color="#a855f7" Icon={IconPipeline} title="Pipeline" to="/pipeline">
-        <div className="quad-stats">
-          <StatTile num={d(s?.pipeline?.call_not_received)} label="Call Not Received" />
-          <StatTile num={d(s?.pipeline?.future_follow_ups)} label="Future Follow Ups" />
-        </div>
-      </QuadCard>
-
-      <QuadCard color="#16a34a" Icon={IconToken} title="Post Token" to="/post-token">
+      <QuadCard color="#6366f1" Icon={IconPipeline} title="Supply Closure Tracker" to="/pipeline">
         <div className="quad-stats cols-1">
           <div>
-            {Object.entries(s?.post_token?.by_stage || {}).map(([stage, n]) => (
-              <div key={stage} className="stat-row">
-                <span className="sr-lbl"><span className="stage-dot" style={{ background: '#16a34a' }} />{stageLabel(stage)}</span>
-                <span className="sr-num">{n}</span>
+            {SUPPLY_STAGES.map((st) => (
+              <div key={st} className="stat-row">
+                <span className="sr-lbl"><span className="stage-dot" style={{ background: STAGE_DOT_COLOR[st] }} />{stageLabel(st)}</span>
+                <span className="sr-num">{d(s?.supply?.[st])}</span>
               </div>
             ))}
-            {(!s || Object.keys(s?.post_token?.by_stage || {}).length === 0) && <div className="muted" style={{ padding: 8 }}>Connected later.</div>}
+          </div>
+        </div>
+      </QuadCard>
+
+      <QuadCard color="#ef4444" Icon={IconRejected} title="Rejected" to="/rejected">
+        <div className="quad-stats cols-1">
+          <div>
+            <div className="stat-row">
+              <span className="sr-lbl"><strong>Total Rejected</strong></span>
+              <span className="sr-num">{d(s?.rejected?.total)}</span>
+            </div>
+            {rejTop.map((r) => (
+              <div key={r.value} className="stat-row">
+                <span className="sr-lbl"><span className="stage-dot" style={{ background: '#ef4444' }} />{r.label}</span>
+                <span className="sr-num">{r.n}</span>
+              </div>
+            ))}
+            {rejOthers > 0 && (
+              <div className="stat-row">
+                <span className="sr-lbl"><span className="stage-dot" style={{ background: '#94a3b8' }} />Others</span>
+                <span className="sr-num">{rejOthers}</span>
+              </div>
+            )}
           </div>
         </div>
       </QuadCard>
@@ -85,21 +120,24 @@ function BoardView() {
 export default function Home() {
   const [view, setView] = useState('board'); // board | table
 
+  const toggle = (
+    <div className="view-toggle">
+      <button className={view === 'board' ? 'on' : ''} onClick={() => setView('board')}>Board</button>
+      <button className={view === 'table' ? 'on' : ''} onClick={() => setView('table')}>Table</button>
+    </div>
+  );
+
   return (
     <div>
-      <div className="page-head">
-        <div>
-          <h2>Home</h2>
-          <div className="ph-sub">Your inventory at a glance.</div>
-        </div>
-        <div className="page-head-spacer" />
-        <div className="view-toggle">
-          <button className={view === 'board' ? 'on' : ''} onClick={() => setView('board')}>Board</button>
-          <button className={view === 'table' ? 'on' : ''} onClick={() => setView('table')}>Table</button>
-        </div>
-      </div>
-
-      {view === 'board' ? <BoardView /> : <InventoryBoard />}
+      {view === 'board' ? (
+        <>
+          <div className="page-head"><h2>Summary</h2><div className="page-head-spacer" />{toggle}</div>
+          <BoardView />
+        </>
+      ) : (
+        <InventoryBoard toolbarExtra={toggle}
+          extraStageGroups={[{ key: 'post_visit', label: 'Post Visit', stages: SUPPLY_STAGES, color: '#6366f1', before: 'rejected' }]} />
+      )}
     </div>
   );
 }

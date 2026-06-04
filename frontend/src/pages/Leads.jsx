@@ -3,7 +3,7 @@ import { api } from '../api/client.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import ExpandPanel from '../components/ExpandPanel.jsx';
 import {
-  CITIES, displayCity, formatPrice, isCreatedToday, REJECT_REASONS, starColor, variation,
+  CITIES, displayCity, formatPrice, isCreatedToday, UNQUALIFIED_REJECT_REASONS, starColor, variation,
 } from '../utils/format.js';
 import { IconExternal, IconSearch } from '../components/icons.jsx';
 
@@ -63,7 +63,7 @@ function UnactedTable({ items, loading, role, onUpdated, onQualify, onReject }) 
                   <StarCell item={it} canSet={canSet} onUpdated={onUpdated} />
                   <td className="inv-td-society">
                     {it.society || '—'}
-                    {isCreatedToday(it.created_at) && <span className="new-badge" style={{ marginLeft: 8 }}>NEW</span>}
+                    {isCreatedToday(it.created_at) && <img className="new-badge-img" src="/new.png" alt="NEW" />}
                     <div className="inv-td-muted" style={{ fontWeight: 400, fontSize: 12 }}>{displayCity(it.city)} · {it.oh_id}</div>
                   </td>
                   <td>
@@ -79,7 +79,7 @@ function UnactedTable({ items, loading, role, onUpdated, onQualify, onReject }) 
                     {rejectFor === it.oh_id && (
                       <div className="reject-menu" onMouseLeave={() => setRejectFor(null)}>
                         <div className="rm-title">Reject reason</div>
-                        {REJECT_REASONS.map((r) => (
+                        {UNQUALIFIED_REJECT_REASONS.map((r) => (
                           <button key={r.value} onClick={() => { setRejectFor(null); onReject(it, r.value); }}>{r.label}</button>
                         ))}
                       </div>
@@ -104,12 +104,13 @@ function UnactedTable({ items, loading, role, onUpdated, onQualify, onReject }) 
 function QualifiedTable({ items, loading, role, onUpdated }) {
   const [openId, setOpenId] = useState(null);
   const canPost = ['admin', 'manager', 'rm'].includes(role);
-  const cols = 7;
+  const cols = 8;
   return (
     <div className="inv-table-wrap">
       <table className="inv-table">
         <thead>
           <tr>
+            <th className="inv-th inv-th-star" />
             <th className="inv-th">Society</th>
             <th className="inv-th">BHK</th>
             <th className="inv-th">Floor</th>
@@ -130,7 +131,10 @@ function QualifiedTable({ items, loading, role, onUpdated }) {
             return (
               <Fragment key={it.oh_id}>
                 <tr className={`inv-row ${isOpen ? 'inv-row-open' : ''}`} onClick={() => setOpenId(isOpen ? null : it.oh_id)}>
-                  <td className="inv-td-society">{it.society || '—'}<div className="inv-td-muted" style={{ fontWeight: 400, fontSize: 12 }}>{displayCity(it.city)} · {it.oh_id}</div></td>
+                  <StarCell item={it} canSet={canPost} onUpdated={onUpdated} />
+                  <td className="inv-td-society">{it.society || '—'}
+                    {it.qualified_today && <img className="new-badge-img" src="/new.png" alt="NEW" />}
+                    <div className="inv-td-muted" style={{ fontWeight: 400, fontSize: 12 }}>{displayCity(it.city)} · {it.oh_id}</div></td>
                   <td>{it.bedrooms != null ? `${it.bedrooms} BHK` : '—'}</td>
                   <td>{it.floor || '—'}</td>
                   <td>{it.area_sqft != null ? `${it.area_sqft} sqft` : '—'}</td>
@@ -162,6 +166,8 @@ export default function Leads() {
   const [loadingL, setLoadingL] = useState(true);
   const [loadingR, setLoadingR] = useState(true);
 
+  // which pane(s) to show: 'unqualified' | 'both' | 'qualified'
+  const [paneView, setPaneView] = useState('both');
   // resizable split (left pane width %, clamped 25–75)
   const [leftPct, setLeftPct] = useState(50);
   const containerRef = useRef(null);
@@ -178,15 +184,19 @@ export default function Leads() {
 
   const loadUnacted = useCallback(async () => {
     setLoadingL(true);
-    try { const r = await api.get(`/api/inventory?${baseParams('lead')}`); setUnacted(r.items || []); }
+    try { const r = await api.get(`/api/inventory?${baseParams('unqualified')}`); setUnacted(r.items || []); }
     finally { setLoadingL(false); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qApplied, city]);
 
   const loadQualified = useCallback(async () => {
     setLoadingR(true);
-    try { const r = await api.get(`/api/inventory?${baseParams('qualified')}`); setQualified(r.items || []); }
-    finally { setLoadingR(false); }
+    try {
+      const p = baseParams('qualified');
+      p.set('annotate_qualified_today', '1'); // stamp rows qualified today → NEW badge
+      const r = await api.get(`/api/inventory?${p}`);
+      setQualified(r.items || []);
+    } finally { setLoadingR(false); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qApplied, city]);
 
@@ -212,7 +222,7 @@ export default function Leads() {
 
   async function qualify(item) {
     setUnacted((prev) => prev.filter((it) => it.oh_id !== item.oh_id));
-    const moved = { ...item, stage: 'qualified' };
+    const moved = { ...item, stage: 'qualified', qualified_today: true };
     setQualified((prev) => [moved, ...prev]);
     try { await api.patch(`/api/inventory/${item.oh_id}`, { stage: 'qualified' }); }
     catch { loadUnacted(); loadQualified(); }
@@ -220,7 +230,7 @@ export default function Leads() {
 
   async function reject(item, reason) {
     setUnacted((prev) => prev.filter((it) => it.oh_id !== item.oh_id));
-    try { await api.patch(`/api/inventory/${item.oh_id}`, { stage: 'rejected', reject_reason: reason }); }
+    try { await api.patch(`/api/inventory/${item.oh_id}`, { stage: 'rejected', stage_reason: reason }); }
     catch { loadUnacted(); }
   }
 
@@ -238,32 +248,44 @@ export default function Leads() {
           <button type="submit" className="btn-primary"><IconSearch size={16} /> Search</button>
           {qApplied && <button type="button" className="btn-ghost" onClick={() => { setQInput(''); setQApplied(''); }}>Clear</button>}
         </form>
+        <div className="toolbar-spacer" />
+        <div className="view-toggle">
+          <button className={paneView === 'unqualified' ? 'on' : ''} onClick={() => setPaneView('unqualified')}>Unqualified</button>
+          <button className={paneView === 'both' ? 'on' : ''} onClick={() => setPaneView('both')}>Both</button>
+          <button className={paneView === 'qualified' ? 'on' : ''} onClick={() => setPaneView('qualified')}>Qualified</button>
+        </div>
       </div>
 
       <div className="leads-split" ref={containerRef}>
-        <div className="leads-pane" style={{ width: `calc(${leftPct}% - 7px)` }}>
-          <div className="leads-pane-head">
-            <h3>Unacted Leads</h3>
-            <span className="lph-count accent">{unacted.length}</span>
-            <span className="muted" style={{ fontSize: 12 }}>status: lead</span>
+        {paneView !== 'qualified' && (
+          <div className="leads-pane" style={{ width: paneView === 'both' ? `calc(${leftPct}% - 7px)` : '100%' }}>
+            <div className="leads-pane-head">
+              <h3>Unacted Leads</h3>
+              <span className="lph-count accent">{unacted.length}</span>
+              <span className="muted" style={{ fontSize: 12 }}>status: unqualified</span>
+            </div>
+            <UnactedTable items={unacted} loading={loadingL} role={user?.role} onUpdated={patch(setUnacted)} onQualify={qualify} onReject={reject} />
           </div>
-          <UnactedTable items={unacted} loading={loadingL} role={user?.role} onUpdated={patch(setUnacted)} onQualify={qualify} onReject={reject} />
-        </div>
+        )}
 
-        <div className={`split-divider ${draggingRef.current ? 'dragging' : ''}`}
-          onMouseDown={() => { draggingRef.current = true; document.body.style.cursor = 'col-resize'; }}
-          role="separator" aria-label="Resize panes">
-          <span className="sd-grip" />
-        </div>
-
-        <div className="leads-pane" style={{ width: `calc(${100 - leftPct}% - 7px)` }}>
-          <div className="leads-pane-head">
-            <h3>Qualified Leads</h3>
-            <span className="lph-count">{qualified.length}</span>
-            <span className="muted" style={{ fontSize: 12 }}>status: qualified</span>
+        {paneView === 'both' && (
+          <div className={`split-divider ${draggingRef.current ? 'dragging' : ''}`}
+            onMouseDown={() => { draggingRef.current = true; document.body.style.cursor = 'col-resize'; }}
+            role="separator" aria-label="Resize panes">
+            <span className="sd-grip" />
           </div>
-          <QualifiedTable items={qualified} loading={loadingR} role={user?.role} onUpdated={patch(setQualified)} />
-        </div>
+        )}
+
+        {paneView !== 'unqualified' && (
+          <div className="leads-pane" style={{ width: paneView === 'both' ? `calc(${100 - leftPct}% - 7px)` : '100%' }}>
+            <div className="leads-pane-head">
+              <h3>Qualified Leads</h3>
+              <span className="lph-count">{qualified.length}</span>
+              <span className="muted" style={{ fontSize: 12 }}>status: qualified</span>
+            </div>
+            <QualifiedTable items={qualified} loading={loadingR} role={user?.role} onUpdated={patch(setQualified)} />
+          </div>
+        )}
       </div>
     </div>
   );

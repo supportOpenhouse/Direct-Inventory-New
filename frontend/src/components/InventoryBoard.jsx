@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { api } from '../api/client.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { CITIES, STAGE_DOT_COLOR, STAGES, stageLabel } from '../utils/format.js';
 import InventoryTable from './InventoryTable.jsx';
 import FilterPanel from './FilterPanel.jsx';
 import AddInventoryModal from './AddInventoryModal.jsx';
+import BulkActionBar from './BulkActionBar.jsx';
 import { IconFilter, IconPlus, IconReload, IconSearch } from './icons.jsx';
 
 const PAGE_SIZE = 50;
@@ -17,12 +18,18 @@ const PAGE_SIZE = 50;
  * `fixedStages` pins the view to a stage set and hides the stage pills (e.g.
  * the Rejected page). `showAdd` toggles the add-inventory button.
  */
-export default function InventoryBoard({ fixedStages = null, showAdd = true, stageFilterable = true }) {
+export default function InventoryBoard({
+  fixedStages = null, showAdd = true, stageFilterable = true, toolbarExtra = null,
+  allowStatusEdit = true, reasonFilter = false, hideFollowUpFilter = false, reasonOptions = undefined,
+  reloadSignal = 0, onReload = null, extraStageGroups = [],
+}) {
   const { user } = useAuth();
   const [qInput, setQInput] = useState('');
   const [qApplied, setQApplied] = useState('');
   const [city, setCity] = useState('');
-  const [stageSel, setStageSel] = useState(() => new Set(fixedStages || []));
+  // Default to "ALL" selected (empty set → effectiveStages falls back to the
+  // fixed stage set), so no individual stage pill is pre-selected.
+  const [stageSel, setStageSel] = useState(() => new Set());
   const [sort, setSort] = useState({ field: 'smart', dir: 'desc' });
   const [page, setPage] = useState(0);
 
@@ -35,6 +42,9 @@ export default function InventoryBoard({ fixedStages = null, showAdd = true, sta
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [counts, setCounts] = useState({ total: 0, by_stage: {} });
+
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState(() => new Set());
 
   const stages = fixedStages || STAGES;
 
@@ -70,6 +80,8 @@ export default function InventoryBoard({ fixedStages = null, showAdd = true, sta
 
   useEffect(() => { setPage(0); refresh(0); refreshCounts(); /* eslint-disable-next-line */ }, [city, qApplied, stageSel, filtersApplied, sort.field, sort.dir]);
   useEffect(() => { refresh(page); /* eslint-disable-next-line */ }, [page]);
+  // External reload trigger (e.g. the tracker's auto-sync finished).
+  useEffect(() => { if (reloadSignal) { refresh(page); refreshCounts(); } /* eslint-disable-next-line */ }, [reloadSignal]);
 
   function onSearch(e) { e?.preventDefault(); setQApplied(qInput.trim()); }
   function toggleStage(s) {
@@ -77,8 +89,53 @@ export default function InventoryBoard({ fixedStages = null, showAdd = true, sta
   }
   function patchItem(updated) { setItems((prev) => prev.map((it) => (it.oh_id === updated.oh_id ? { ...it, ...updated } : it))); }
 
+  function toggleSelect(oh_id) {
+    setSelected((prev) => { const n = new Set(prev); if (n.has(oh_id)) n.delete(oh_id); else n.add(oh_id); return n; });
+  }
+  function toggleSelectAll(visibleIds) {
+    if (!visibleIds || visibleIds.length === 0) return;
+    setSelected((prev) => {
+      const allChecked = visibleIds.every((id) => prev.has(id));
+      const n = new Set(prev);
+      if (allChecked) visibleIds.forEach((id) => n.delete(id));
+      else visibleIds.forEach((id) => n.add(id));
+      return n;
+    });
+  }
+  function exitSelectMode() { setSelectMode(false); setSelected(new Set()); }
+  function onBulkDone(result) {
+    exitSelectMode();
+    refresh(page);
+    refreshCounts();
+    if (result?.skipped_forbidden?.length || result?.not_found?.length) {
+      alert(
+        `Updated ${result.updated} of ${result.requested}.\n`
+        + (result.skipped_forbidden?.length ? `Forbidden (not yours): ${result.skipped_forbidden.length}\n` : '')
+        + (result.not_found?.length ? `Not found: ${result.not_found.length}` : ''),
+      );
+    }
+  }
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const filterCount = Object.keys(filtersApplied).length;
+  // When the page is pinned to a stage subset, "ALL" means all of THIS page's
+  // stages — sum their counts rather than showing the global total.
+  const allCount = fixedStages
+    ? stages.reduce((a, s) => a + (counts.by_stage?.[s] || 0), 0)
+    : counts.total;
+
+  // A "grouped" count pill (e.g. Post Visit = all supply stages combined).
+  function groupPill(g) {
+    const cnt = g.stages.reduce((a, st) => a + (counts.by_stage?.[st] || 0), 0);
+    const active = g.stages.length > 0 && g.stages.every((st) => stageSel.has(st)) && stageSel.size === g.stages.length;
+    return (
+      <button key={g.key} type="button" className={active ? 'count-pill count-pill-active' : 'count-pill'}
+        onClick={() => setStageSel(active ? new Set() : new Set(g.stages))}>
+        <div className="num" style={{ color: g.color }}>{cnt}</div>
+        <div className="lbl">{g.label.toUpperCase()}</div>
+      </button>
+    );
+  }
 
   return (
     <div>
@@ -94,21 +151,36 @@ export default function InventoryBoard({ fixedStages = null, showAdd = true, sta
         </form>
         <button className="btn-ghost" onClick={() => setShowFilters(true)}><IconFilter size={16} /> Filters{filterCount ? ` (${filterCount})` : ''}</button>
         {filterCount > 0 && <button className="btn-link" onClick={() => { setFiltersApplied({}); setFilterFormState({}); }}>Reset</button>}
-        <div className="toolbar-spacer" />
         {showAdd && <button className="btn-primary" onClick={() => setShowAddModal(true)}><IconPlus size={16} /> Add Inventory</button>}
+        <div className="toolbar-spacer" />
+        <button className={selectMode ? 'btn-primary' : 'btn-ghost'} onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}>
+          {selectMode ? 'Exit Select' : 'Select'}
+        </button>
+        {toolbarExtra}
       </div>
+
+      {/* Floats to the top-right of the page (see .bulk-bar) while selecting. */}
+      {selectMode && selected.size > 0 && (
+        <BulkActionBar selected={selected} role={user?.role} onCleared={exitSelectMode} onDone={onBulkDone} />
+      )}
 
       {stageFilterable && (
         <div className="stage-counts">
-          <button type="button" className={stageSel.size === 0 ? 'count-pill count-pill-active' : 'count-pill'} onClick={() => setStageSel(new Set(fixedStages || []))}>
-            <div className="num">{counts.total}</div><div className="lbl">ALL</div>
-          </button>
-          {stages.map((s) => (
-            <button key={s} type="button" className={stageSel.has(s) ? 'count-pill count-pill-active' : 'count-pill'} onClick={() => toggleStage(s)}>
-              <div className="num" style={{ color: STAGE_DOT_COLOR[s] }}>{counts.by_stage?.[s] ?? 0}</div>
-              <div className="lbl">{stageLabel(s).toUpperCase()}</div>
+          <div className="stage-pills">
+            <button type="button" className={stageSel.size === 0 ? 'count-pill count-pill-active' : 'count-pill'} onClick={() => setStageSel(new Set())}>
+              <div className="num">{allCount}</div><div className="lbl">ALL</div>
             </button>
-          ))}
+            {stages.map((s) => (
+              <Fragment key={s}>
+                {extraStageGroups.filter((g) => g.before === s).map(groupPill)}
+                <button type="button" className={stageSel.has(s) ? 'count-pill count-pill-active' : 'count-pill'} onClick={() => toggleStage(s)}>
+                  <div className="num" style={{ color: STAGE_DOT_COLOR[s] }}>{counts.by_stage?.[s] ?? 0}</div>
+                  <div className="lbl">{stageLabel(s).toUpperCase()}</div>
+                </button>
+              </Fragment>
+            ))}
+            {extraStageGroups.filter((g) => !g.before).map(groupPill)}
+          </div>
         </div>
       )}
 
@@ -118,15 +190,18 @@ export default function InventoryBoard({ fixedStages = null, showAdd = true, sta
         <button className="btn-ghost" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>← Prev</button>
         <span className="page-num">Page {page + 1} / {totalPages}</span>
         <button className="btn-ghost" disabled={page + 1 >= totalPages} onClick={() => setPage((p) => p + 1)}>Next →</button>
-        <button className="icon-btn" onClick={() => { refresh(page); refreshCounts(); }} disabled={loading} aria-label="Reload">
+        <button className="icon-btn" onClick={async () => { if (onReload) { setLoading(true); try { await onReload(); } catch { /* ignore */ } } refresh(page); refreshCounts(); }} disabled={loading} aria-label="Reload">
           <span className={`reload-icon ${loading ? 'reload-icon-spinning' : ''}`}><IconReload size={16} /></span>
         </button>
       </div>
 
-      <InventoryTable items={items} loading={loading} role={user?.role} sort={sort} onSort={setSort} onUpdated={patchItem} />
+      <InventoryTable items={items} loading={loading} role={user?.role} sort={sort} onSort={setSort} onUpdated={patchItem}
+        selectMode={selectMode} selected={selected} onToggleSelect={toggleSelect} onToggleSelectAll={toggleSelectAll} allowStatusEdit={allowStatusEdit} />
 
       {showFilters && (
-        <FilterPanel initial={filterFormState} defaultCity={city}
+        <FilterPanel initial={filterFormState} defaultCity={city} role={user?.role}
+          showReason={reasonFilter} showFollowUp={!hideFollowUpFilter}
+          {...(reasonOptions ? { reasonOptions } : {})}
           onClose={() => setShowFilters(false)}
           onApply={(applied, form) => { setFiltersApplied(applied); setFilterFormState(form); setShowFilters(false); }} />
       )}
