@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api/client.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
-import { STAGE_DOT_COLOR, stageLabel } from '../utils/format.js';
+import { STAGES, STAGE_DOT_COLOR, stageLabel } from '../utils/format.js';
 import { PRESETS, PRESET_LABELS, downloadCSV, todayIST } from '../utils/reportFilters.js';
 import UserReportAnalytics from '../components/UserReportAnalytics.jsx';
 
@@ -36,10 +36,22 @@ function UserMultiSelect({ options, value, onChange }) {
   );
 }
 
+// Worked stages shown on every user card — always all of them, even at 0, so
+// the row reads consistently. 'lead' is the intake stage (never a winner).
+const REPORT_STAGES = STAGES.filter((s) => s !== 'lead' && s !== 'unqualified');
+
 function StageCountPills({ counts }) {
-  return Object.entries(counts).map(([s, n]) => (
-    <span key={s} className="dr-count-pill"><span className="stage-dot" style={{ background: STAGE_DOT_COLOR[s] || '#94a3b8' }} />{stageLabel(s)} <strong>{n}</strong></span>
-  ));
+  const c = counts || {};
+  // Any unexpected stage present in the data (e.g. a supply stage) is appended.
+  const extra = Object.keys(c).filter((s) => !REPORT_STAGES.includes(s) && s !== 'lead' && s !== 'unqualified');
+  return [...REPORT_STAGES, ...extra].map((s) => {
+    const n = c[s] || 0;
+    return (
+      <span key={s} className={`dr-count-pill ${n === 0 ? 'dr-count-zero' : ''}`}>
+        <span className="stage-dot" style={{ background: STAGE_DOT_COLOR[s] || '#94a3b8' }} />{stageLabel(s)} <strong>{n}</strong>
+      </span>
+    );
+  });
 }
 
 export default function Report() {
@@ -120,10 +132,14 @@ export default function Report() {
               <a key={u.actor_email} href={detailHref(u.actor_email)} target="_blank" rel="noreferrer" className="ur-user-card">
                 <div className="dr-user-head">
                   <div><strong>{u.actor_name || u.actor_email}</strong>{u.actor_role && <span className="role-chip dr-role">{u.actor_role}</span>}<div className="dr-user-email">{u.actor_email}</div></div>
-                  <div className="dr-user-counts">
+                </div>
+                <div className="dr-user-counts">
+                  <div className="dr-meta-row">
                     <span className="dr-total">{u.unique_leads || 0} unique</span>
                     <span className="dr-total">{u.total} actions</span>
                     <span className="dr-count-pill">{u.days_active} days active</span>
+                  </div>
+                  <div className="dr-stage-row">
                     <StageCountPills counts={u.counts} />
                   </div>
                 </div>

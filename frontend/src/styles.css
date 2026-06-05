@@ -714,9 +714,12 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2);
 .ur-user-card:hover, .ur-day-row:hover { border-color: var(--brand); box-shadow: var(--shadow-sm); }
 .dr-user-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .dr-user-email { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-.dr-user-counts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* Counts stack under the name: meta line, then the stage pills line(s). */
+.dr-user-counts { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.dr-meta-row, .dr-stage-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .dr-total { font-weight: 700; font-size: 14px; color: var(--text); }
 .dr-count-pill { display: inline-flex; align-items: center; gap: 4px; background: var(--surface-3); border-radius: 999px; padding: 4px 10px; font-size: 12px; color: var(--text-2); font-weight: 500; }
+.dr-count-zero { opacity: .45; }
 .dr-role { margin-left: 8px; }
 .ur-day-date { font-size: 14px; margin-bottom: 8px; }
 .stage-inline { display: inline-flex; align-items: center; }
