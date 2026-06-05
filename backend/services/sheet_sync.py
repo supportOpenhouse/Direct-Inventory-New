@@ -4,10 +4,9 @@ The backend just receives JSON, dedups by listing_link, upserts raw fields,
 assigns OH-IDs + RMs to new rows. Workflow fields (stage, notes, assignments,
 oh_id) are NEVER touched by sync. Removed-from-sheet rows stay in the DB.
 
-New rows land in the `unqualified` stage — unacted intake. An RM qualifies /
-works the lead from there (unqualified → qualified → call_not_received /
-follow_up / visit_scheduled / rejected). This mirrors the Leads board's
-unqualified vs qualified split.
+New rows land in the `lead` stage — unacted intake. An RM works the lead from
+there (lead → active → qualified → call_not_received / follow_up /
+visit_scheduled / rejected).
 """
 from __future__ import annotations
 

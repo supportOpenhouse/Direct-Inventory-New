@@ -17,8 +17,8 @@ Shape:
 
   "new" = the row ENTERED that stage today (IST), read from activity_log; "old"
   = currently in that stage but entered earlier. For the intake 'lead' stage,
-  "new" = created today (a lead enters at creation); 'lead' folds the legacy
-  'unqualified'. visit.completed = rows now in any Supply Closure Tracker stage
+  "new" = created today (a lead enters at creation).
+  visit.completed = rows now in any Supply Closure Tracker stage
   (a completed visit progresses there); to_be_completed / overdue come from the
   property-DB scheduled visit date for stage='visit_scheduled' rows.
 
@@ -114,12 +114,12 @@ def summary():
         with conn, conn.cursor() as cur:
             # All summary-card counts in one conditional-aggregation pass.
             # "new" = entered the stage today (IST); for the intake 'lead' stage
-            # that's created-today. 'lead' folds the legacy 'unqualified'.
+            # that's created-today.
             cur.execute(
                 f"""
                 SELECT
-                  COUNT(*) FILTER (WHERE stage IN ('lead', 'unqualified') AND {_CREATED_IST} = {_TODAY_IST}) AS lead_new,
-                  COUNT(*) FILTER (WHERE stage IN ('lead', 'unqualified') AND {_CREATED_IST} < {_TODAY_IST}) AS lead_old,
+                  COUNT(*) FILTER (WHERE stage = 'lead' AND {_CREATED_IST} = {_TODAY_IST}) AS lead_new,
+                  COUNT(*) FILTER (WHERE stage = 'lead' AND {_CREATED_IST} < {_TODAY_IST}) AS lead_old,
                   COUNT(*) FILTER (WHERE stage = 'active' AND {_ACTIVE_TODAY}) AS active_new,
                   COUNT(*) FILTER (WHERE stage = 'active' AND NOT {_ACTIVE_TODAY}) AS active_old,
                   COUNT(*) FILTER (WHERE stage = 'qualified' AND {_QUALIFIED_TODAY}) AS qualified_new,
@@ -139,8 +139,8 @@ def summary():
                   -- (lead→active) worked = created today & moved out of lead.
                   -- Task 2 (active→qualified) worked = created today & moved past active.
                   COUNT(*) FILTER (WHERE {_CREATED_IST} = {_TODAY_IST}) AS tt_total,
-                  COUNT(*) FILTER (WHERE {_CREATED_IST} = {_TODAY_IST} AND stage NOT IN ('lead','unqualified')) AS tt_task1_worked,
-                  COUNT(*) FILTER (WHERE {_CREATED_IST} = {_TODAY_IST} AND stage NOT IN ('lead','unqualified','active')) AS tt_task2_worked
+                  COUNT(*) FILTER (WHERE {_CREATED_IST} = {_TODAY_IST} AND stage <> 'lead') AS tt_task1_worked,
+                  COUNT(*) FILTER (WHERE {_CREATED_IST} = {_TODAY_IST} AND stage NOT IN ('lead','active')) AS tt_task2_worked
                 FROM inventory
                 {where}
                 """,

@@ -12,8 +12,8 @@ LEFT JOIN against users so we can show actor name alongside email.
 
 The user-report endpoints dedupe to the LATEST stage_change per (actor, IST
 day, lead) — the "winner" — then aggregate. A winner whose final stage is the
-intake stage `unqualified` is dropped: moving a lead back to `unqualified` is
-not work done.
+intake stage `lead` is dropped: moving a lead back to the intake stage is not
+work done.
 """
 from __future__ import annotations
 
@@ -231,7 +231,7 @@ def _parse_ist_range(default_to_today: bool = True):
 # Base SELECT — picks the latest stage_change per (actor, IST day, lead).
 # Joins are done in the outer query so each endpoint can pull what it needs.
 #
-# Lead-days whose LATEST action was moving to 'unqualified' are dropped
+# Lead-days whose LATEST action was moving to 'lead' are dropped
 # entirely. Moving a lead back to the intake stage is not "work done" on the
 # lead — the user shouldn't be credited for that lead that day. Filtering here,
 # AFTER the DISTINCT ON, means we omit the lead-day rather than silently falling
@@ -261,7 +261,7 @@ _WINNERS_CTE = """
                      a.entity_id,
                      a.created_at DESC
         ) latest
-        WHERE latest.final_stage NOT IN ('lead', 'unqualified')
+        WHERE latest.final_stage <> 'lead'
     )
 """
 

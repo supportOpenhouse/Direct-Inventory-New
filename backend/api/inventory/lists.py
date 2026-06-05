@@ -14,7 +14,6 @@ from ._common import (
     _build_filters,
     _scope_clause,
     bp,
-    fold_lead_rows,
     overdue_visit_ids,
 )
 
@@ -54,9 +53,9 @@ def list_inventory():
                 f"     WHEN follow_up_at::DATE < {today_ist} THEN 1 "
                 f"     ELSE 2 END ASC, "
                 # Stage order applies only inside the overdue bucket: Follow Up
-                # first, then Unqualified, then the rest.
+                # first, then Lead, then the rest.
                 f"CASE WHEN follow_up_at IS NOT NULL AND follow_up_at::DATE < {today_ist} "
-                f"     THEN CASE stage WHEN 'follow_up' THEN 0 WHEN 'lead' THEN 1 WHEN 'unqualified' THEN 1 ELSE 2 END "
+                f"     THEN CASE stage WHEN 'follow_up' THEN 0 WHEN 'lead' THEN 1 ELSE 2 END "
                 f"     ELSE 0 END ASC, "
                 # Overdue: most recent follow-up date first.
                 f"CASE WHEN follow_up_at IS NOT NULL AND follow_up_at::DATE < {today_ist} "
@@ -127,8 +126,6 @@ def list_inventory():
         # Annotate each row with cp_match ('perfect' | 'partial' | None).
         # Failure here is non-fatal — rows already have cp_match=None.
         annotate_cp_match(rows)
-        # Legacy 'lead' rows surface as 'unqualified'.
-        fold_lead_rows(rows)
         # Opt-in: flag visit_scheduled rows whose scheduled visit date is past
         # (from the property DB). Only runs when requested, to keep the hot list
         # path free of the cross-DB read elsewhere.
@@ -216,10 +213,8 @@ def inventory_counts():
             )
             by_stage = {s: 0 for s in (*ALL_STAGES, *SUPPLY_STAGES)}
             for r in cur.fetchall():
-                # Fold the legacy 'unqualified' value into 'lead'.
-                st = "lead" if r["stage"] == "unqualified" else r["stage"]
-                if st in by_stage:
-                    by_stage[st] += r["n"]
+                if r["stage"] in by_stage:
+                    by_stage[r["stage"]] += r["n"]
             cur.execute(
                 f"""SELECT COUNT(*) AS n FROM (
                        {INVENTORY_WITH_PRICING_SQL} {inner_where}

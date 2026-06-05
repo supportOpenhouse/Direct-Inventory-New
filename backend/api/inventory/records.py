@@ -21,7 +21,6 @@ from ._common import (
     VALID_STAGES,
     _expand_cities,
     bp,
-    fold_lead_rows,
 )
 
 
@@ -35,7 +34,6 @@ def get_one(oh_id: str):
             row = cur.fetchone()
             if not row:
                 return jsonify({"error": "not found"}), 404
-            fold_lead_rows([row])  # legacy 'lead' surfaces as 'unqualified'
             # Pull recent activity for this entity.
             cur.execute(
                 """

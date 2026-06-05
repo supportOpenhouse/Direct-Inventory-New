@@ -84,8 +84,6 @@ VALID_STAGES = {
     "follow_up",             # ongoing conversation
     "visit_scheduled",
     "rejected",
-    # Legacy intake name (folded to 'lead' at read time); still accepted.
-    "unqualified",
     # Supply Closure Tracker stages — post-visit acquisition funnel, synced from
     # PROPERTIES_DB.cp_inventory_status (direct_stage). Live alongside the lead
     # stages; shown only on the tracker page.
@@ -127,7 +125,7 @@ SORTABLE_FIELDS = {
     "variation":     "CASE WHEN oh_price IS NULL OR oh_price = 0 THEN NULL "
                      "ELSE (price::FLOAT - oh_price) / oh_price * 100 END",
     # Stage sorts in pipeline order, not alphabetically.
-    "stage":         "CASE stage WHEN 'lead' THEN 0 WHEN 'unqualified' THEN 0 "
+    "stage":         "CASE stage WHEN 'lead' THEN 0 "
                      "WHEN 'active' THEN 1 WHEN 'qualified' THEN 2 "
                      "WHEN 'call_not_received' THEN 3 WHEN 'follow_up' THEN 4 "
                      "WHEN 'visit_scheduled' THEN 5 WHEN 'rejected' THEN 6 ELSE 7 END",
@@ -142,8 +140,8 @@ SORTABLE_FIELDS = {
 
 # Reject reasons written to inventory.stage_reason alongside stage='rejected'.
 # The backend accepts the UNION of two context-specific sets the frontend shows:
-#   - rejecting an unqualified/intake lead (stage 'qualified', the "Lead" board)
-#     uses the listing-quality reasons (ground_floor / listing_removed /
+#   - rejecting an intake lead (stage 'lead', the "Lead" board) uses the
+#     listing-quality reasons (ground_floor / listing_removed /
 #     invalid_duplicate);
 #   - rejecting from a worked stage (call_not_received / follow_up /
 #     visit_scheduled) uses the engagement reasons, which are the values already
@@ -186,15 +184,6 @@ BULK_ALLOWED_FIELDS = {
 
 # Roles allowed to flag a lead as Priority / set star_color.
 PRIORITY_ROLES = {"admin", "manager", "rm"}
-
-
-def fold_lead_rows(rows):
-    """In-place: rewrite any row still carrying the legacy 'unqualified' stage to
-    'lead' (the current intake name), so the API always emits 'lead'."""
-    for r in rows:
-        if r.get("stage") == "unqualified":
-            r["stage"] = "lead"
-    return rows
 
 
 def _expand_cities(cities: list[str]) -> list[str]:
@@ -264,9 +253,6 @@ def _build_filters(user: dict, args, alias: str = ""):
         # Comma-separated list → IN (...). Single value still works because
         # split on ',' returns [stage].
         stages = [s.strip() for s in stage.split(",") if s.strip()]
-        # Filtering 'lead' also catches the legacy 'unqualified' value.
-        if "lead" in stages and "unqualified" not in stages:
-            stages.append("unqualified")
         if len(stages) == 1:
             base_filters.append(f"AND {p}stage = %s")
             base_params.append(stages[0])
