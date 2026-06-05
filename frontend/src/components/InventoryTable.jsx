@@ -111,7 +111,7 @@ export default function InventoryTable({
             <SortTh field="floor" label="Floor" sort={sort} onSort={onSort} />
             <SortTh field="area_sqft" label="Area" sort={sort} onSort={onSort} cls="inv-col-area" />
             <SortTh field="price" label="Asking" sort={sort} onSort={onSort} align="right" cls="inv-col-asking" />
-            <SortTh field="oh_price" label="OH Price" sort={sort} onSort={onSort} align="right" />
+            <SortTh field="oh_price" label="OH Price" sort={sort} onSort={onSort} align="right" cls="inv-col-oh" />
             <SortTh field="variation" label="Variation" sort={sort} onSort={onSort} align="right" />
             <SortTh field="stage" label="Stage" sort={sort} onSort={onSort} cls="inv-col-stage" />
             {showReasonCol && <th className="inv-th inv-col-reason">Reason</th>}
@@ -172,7 +172,7 @@ export default function InventoryTable({
                   <td>{item.floor || '—'}</td>
                   <td className="inv-col-area">{item.area_sqft != null ? `${item.area_sqft} sqft` : '—'}</td>
                   <td className="inv-td-num val-orange inv-col-asking">{formatPrice(item.price)}</td>
-                  <td className="inv-td-num"><OhPrice item={item} /></td>
+                  <td className="inv-td-num inv-col-oh"><OhPrice item={item} /></td>
                   <td className={`inv-td-num ${v ? `val-var-${v.sign}` : 'muted'}`}>{v ? v.label : '—'}</td>
                   <td className="inv-col-stage">
                     <span className="stage-dot" style={{ background: STAGE_DOT_COLOR[item.stage] }} />{stageLabel(item.stage)}

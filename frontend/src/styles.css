@@ -313,6 +313,9 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2);
 .tt-prog-fill { height: 100%; border-radius: 99px; transition: width .4s ease; }
 .tt-prog-num { font-size: 13px; color: var(--text-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .tt-prog-num .tt-done { color: var(--green-fg); font-weight: 800; margin-left: 5px; }
+/* clickable task card (admins → Track Tasks) */
+.task-card-link { cursor: pointer; text-decoration: none; color: inherit; transition: border-color .14s, box-shadow .14s; }
+.task-card-link:hover { border-color: var(--tc, var(--brand)); box-shadow: var(--shadow-md); }
 /* locked task card — dim the content, keep the lock at full opacity */
 .task-card-locked { cursor: not-allowed; }
 .task-card-locked .tc-content { opacity: .4; }
@@ -418,8 +421,9 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2);
 .inv-td-muted { color: var(--text-muted); }
 /* Wider, non-wrapping columns so values aren't cramped. */
 .inv-col-bhk { min-width: 82px; white-space: nowrap; }
-.inv-col-area { min-width: 96px; white-space: nowrap; }
+.inv-col-area { min-width: 76px; white-space: nowrap; }
 .inv-col-asking { min-width: 112px; white-space: nowrap; }
+.inv-col-oh { min-width: 142px; white-space: nowrap; }
 .inv-col-posted { min-width: 116px; white-space: nowrap; }
 .inv-col-followup { min-width: 124px; white-space: nowrap; }
 .inv-col-society { min-width: 190px; }

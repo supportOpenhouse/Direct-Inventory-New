@@ -35,12 +35,11 @@ function QuadCard({ color, Icon, title, to, children }) {
 // `locked`, the content is dimmed and a full-opacity lock overlays it — the
 // lock is a SIBLING of the dimmed content (parent opacity would otherwise cap
 // the child's opacity).
-function TaskCard({ color, Icon, title, total, worked, loading, locked = false, onMouseEnter, onMouseLeave }) {
+function TaskCard({ color, Icon, title, total, worked, loading, locked = false, onMouseEnter, onMouseLeave, to = null }) {
   const pct = (worked != null && total > 0) ? Math.round((worked / total) * 100) : 0;
   const noTask = !loading && total === 0;
-  return (
-    <div className={`task-card ${locked ? 'task-card-locked' : ''}`} style={{ '--tc': color }}
-      onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
+  const inner = (
+    <>
       <div className="tc-content">
         <div className="tc-head">
           <span className="tc-ic" style={{ color }}><Icon size={18} /></span>
@@ -61,6 +60,20 @@ function TaskCard({ color, Icon, title, total, worked, loading, locked = false, 
         )}
       </div>
       {locked && <span className="tc-lock" aria-label="Locked"><IconLock size={26} /></span>}
+    </>
+  );
+  const cls = `task-card ${locked ? 'task-card-locked' : ''} ${to && !locked ? 'task-card-link' : ''}`;
+  // Linkable (admins → Track Tasks) only when not locked; locked cards stay plain.
+  if (to && !locked) {
+    return (
+      <Link to={to} className={cls} style={{ '--tc': color }} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
+        {inner}
+      </Link>
+    );
+  }
+  return (
+    <div className={cls} style={{ '--tc': color }} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
+      {inner}
     </div>
   );
 }
@@ -79,10 +92,12 @@ function TodaysTask({ task, loading, isAdmin = false }) {
       <h2 className="tt-title">Today's Task</h2>
       <div className="task-grid">
         <TaskCard color="#fa541c" Icon={IconLeads} title="TASK 1 : NEW LEADS → ACTIVE LEADS"
-          total={total1} worked={worked1} loading={loading} />
+          total={total1} worked={worked1} loading={loading}
+          to={isAdmin ? '/track-tasks' : undefined} />
         <TaskCard color="#f59e0b" Icon={IconQualified} title="TASK 2 : NEW ACTIVE LEADS → QUALIFIED LEADS"
           total={task?.active?.total ?? 0} worked={task?.active?.worked ?? 0} loading={loading}
           locked={task2Locked}
+          to={isAdmin ? '/track-tasks' : undefined}
           onMouseEnter={() => task2Locked && setShowToast(true)}
           onMouseLeave={() => setShowToast(false)} />
       </div>
