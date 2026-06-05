@@ -302,6 +302,7 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2);
 .tc-bar { height: 6px; border-radius: 99px; background: var(--surface-3); overflow: hidden; margin: 12px 0 8px; }
 .tc-bar-fill { height: 100%; border-radius: 99px; background: var(--tc, var(--brand)); transition: width .4s ease; }
 .tc-sub { font-size: 12.5px; color: var(--text-muted); }
+.tc-notask { font-size: 20px; font-weight: 700; color: var(--text-faint); padding: 10px 0 14px; }
 /* locked task card — dim the content, keep the lock at full opacity */
 .task-card-locked { cursor: not-allowed; }
 .task-card-locked .tc-content { opacity: .4; }

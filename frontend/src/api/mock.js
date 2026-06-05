@@ -506,10 +506,14 @@ export function mockApi(method, path, body) {
       visit: { completed: Object.values(supply).reduce((a, b) => a + b, 0), to_be_completed: 0, overdue: 0 },
       supply,
       rejected: { total: rejected.length, by_reason },
-      todays_task: {
-        leads: { total: olderToday(leads), worked: 0 },
-        active: { total: olderToday(active), worked: 0 },
-      },
+      todays_task: (() => {
+        const createdToday = DB.inventory.filter((it) => created(it) === today);
+        const ttTotal = createdToday.length;
+        const ttTask1 = createdToday.filter((it) => !['lead', 'unqualified'].includes(it.stage)).length;
+        const task1Done = ttTask1 >= ttTotal;
+        const ttTask2 = task1Done ? createdToday.filter((it) => !['lead', 'unqualified', 'active'].includes(it.stage)).length : null;
+        return { leads: { total: ttTotal, worked: ttTask1 }, active: { total: ttTotal, worked: ttTask2 } };
+      })(),
     };
   }
 

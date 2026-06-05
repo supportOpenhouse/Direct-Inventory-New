@@ -35,7 +35,8 @@ function QuadCard({ color, Icon, title, to, children }) {
 // lock is a SIBLING of the dimmed content (parent opacity would otherwise cap
 // the child's opacity).
 function TaskCard({ color, Icon, title, total, worked, loading, locked = false, onMouseEnter, onMouseLeave }) {
-  const pct = total > 0 ? Math.round((worked / total) * 100) : 0;
+  const pct = (worked != null && total > 0) ? Math.round((worked / total) * 100) : 0;
+  const noTask = !loading && total === 0;
   return (
     <div className={`task-card ${locked ? 'task-card-locked' : ''}`} style={{ '--tc': color }}
       onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
@@ -44,13 +45,19 @@ function TaskCard({ color, Icon, title, total, worked, loading, locked = false, 
           <span className="tc-ic" style={{ color }}><Icon size={18} /></span>
           <h4>{title}</h4>
         </div>
-        <div className="tc-frac">
-          <span className="tc-worked">{loading ? '—' : worked}</span>
-          <span className="tc-of">/ {loading ? '—' : total}</span>
-          <span className="tc-frac-lbl">worked</span>
-        </div>
-        <div className="tc-bar"><div className="tc-bar-fill" style={{ width: `${loading ? 0 : pct}%` }} /></div>
-        <div className="tc-sub">{loading ? '—' : `${total} at start of day · ${pct}% done`}</div>
+        {noTask ? (
+          <div className="tc-notask">No Task</div>
+        ) : (
+          <>
+            <div className="tc-frac">
+              <span className="tc-worked">{loading ? '—' : (worked == null ? '—' : worked)}</span>
+              <span className="tc-of">/ {loading ? '—' : total}</span>
+              <span className="tc-frac-lbl">worked</span>
+            </div>
+            <div className="tc-bar"><div className="tc-bar-fill" style={{ width: `${pct}%` }} /></div>
+            <div className="tc-sub">{loading ? '—' : `${total} created today · ${pct}% done`}</div>
+          </>
+        )}
       </div>
       {locked && <span className="tc-lock" aria-label="Locked"><IconLock size={26} /></span>}
     </div>

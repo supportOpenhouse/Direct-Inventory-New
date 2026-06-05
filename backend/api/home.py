@@ -21,6 +21,11 @@ Shape:
   'unqualified'. visit.completed = rows now in any Supply Closure Tracker stage
   (a completed visit progresses there); to_be_completed / overdue come from the
   property-DB scheduled visit date for stage='visit_scheduled' rows.
+
+  todays_task: both tasks' total = leads CREATED today (IST). leads.worked =
+  created-today leads moved out of 'lead' (Task 1: lead→active). active.worked =
+  created-today leads moved past 'active' (Task 2: active→qualified) — only
+  computed once Task 1 is complete, else null (the card is locked client-side).
 """
 from __future__ import annotations
 
@@ -128,7 +133,14 @@ def summary():
                   COUNT(*) FILTER (WHERE stage = 'token_to_ama') AS sup_token_to_ama,
                   COUNT(*) FILTER (WHERE stage = 'onboarded') AS sup_onboarded,
                   COUNT(*) FILTER (WHERE stage = 'rejected_post_visit') AS sup_rejected_post_visit,
-                  COUNT(*) FILTER (WHERE stage = 'cancelled_post_token') AS sup_cancelled_post_token
+                  COUNT(*) FILTER (WHERE stage = 'cancelled_post_token') AS sup_cancelled_post_token,
+
+                  -- Today's Task: denominator = leads created today (IST). Task 1
+                  -- (lead→active) worked = created today & moved out of lead.
+                  -- Task 2 (active→qualified) worked = created today & moved past active.
+                  COUNT(*) FILTER (WHERE {_CREATED_IST} = {_TODAY_IST}) AS tt_total,
+                  COUNT(*) FILTER (WHERE {_CREATED_IST} = {_TODAY_IST} AND stage NOT IN ('lead','unqualified')) AS tt_task1_worked,
+                  COUNT(*) FILTER (WHERE {_CREATED_IST} = {_TODAY_IST} AND stage NOT IN ('lead','unqualified','active')) AS tt_task2_worked
                 FROM inventory
                 {where}
                 """,
@@ -146,43 +158,13 @@ def summary():
             )
             by_reason = {r["reason"]: r["n"] for r in cur.fetchall()}
 
-            # Today's Task — morning cohort + how many have been worked. 'lead'
-            # folds the legacy 'unqualified' alias.
-            scope_i, scope_i_params = _scope_clause(g.user, alias="i")
-            cur.execute(
-                f"""
-                SELECT
-                  COUNT(*) FILTER (WHERE ms_norm = 'lead')                           AS lead_total,
-                  COUNT(*) FILTER (WHERE ms_norm = 'lead'   AND cs_norm <> 'lead')   AS lead_worked,
-                  COUNT(*) FILTER (WHERE ms_norm = 'active')                         AS active_total,
-                  COUNT(*) FILTER (WHERE ms_norm = 'active' AND cs_norm <> 'active') AS active_worked
-                FROM (
-                  SELECT
-                    CASE WHEN i.stage IN ('lead','unqualified') THEN 'lead' ELSE i.stage END   AS cs_norm,
-                    CASE WHEN m.ms_raw IN ('lead','unqualified') THEN 'lead' ELSE m.ms_raw END AS ms_norm
-                  FROM inventory i
-                  CROSS JOIN LATERAL (
-                    SELECT COALESCE(
-                      (SELECT al.after_value FROM activity_log al
-                         WHERE al.entity_type = 'inventory' AND al.entity_id = i.oh_id
-                           AND al.action IN {_STAGE_CHANGE_ACTIONS}
-                           AND (al.created_at AT TIME ZONE 'Asia/Kolkata')::DATE < {_TODAY_IST}
-                         ORDER BY al.created_at DESC LIMIT 1),
-                      (SELECT al.before_value FROM activity_log al
-                         WHERE al.entity_type = 'inventory' AND al.entity_id = i.oh_id
-                           AND al.action IN {_STAGE_CHANGE_ACTIONS}
-                           AND (al.created_at AT TIME ZONE 'Asia/Kolkata')::DATE = {_TODAY_IST}
-                         ORDER BY al.created_at ASC LIMIT 1),
-                      i.stage
-                    ) AS ms_raw
-                  ) m
-                  WHERE TRUE {scope_i}
-                    AND (i.created_at AT TIME ZONE 'Asia/Kolkata')::DATE < {_TODAY_IST}
-                ) sub
-                """,
-                scope_i_params,
-            )
-            task = cur.fetchone()
+        # Today's Task progress. Denominator = leads created today. Task 2's
+        # worked count is only exposed once Task 1 is complete (gating); until
+        # then it's null and the card is locked client-side.
+        tt_total = row["tt_total"]
+        tt_task1_worked = row["tt_task1_worked"]
+        task1_done = tt_task1_worked >= tt_total
+        tt_task2_worked = row["tt_task2_worked"] if task1_done else None
 
         supply = {
             "pipeline": row["sup_pipeline"],
@@ -213,8 +195,8 @@ def summary():
             "supply": supply,
             "rejected": {"total": row["rejected_total"], "by_reason": by_reason},
             "todays_task": {
-                "leads": {"total": task["lead_total"], "worked": task["lead_worked"]},
-                "active": {"total": task["active_total"], "worked": task["active_worked"]},
+                "leads": {"total": tt_total, "worked": tt_task1_worked},
+                "active": {"total": tt_total, "worked": tt_task2_worked},
             },
         })
     finally:
