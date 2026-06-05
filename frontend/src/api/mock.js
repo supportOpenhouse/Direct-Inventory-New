@@ -517,6 +517,28 @@ export function mockApi(method, path, body) {
     };
   }
 
+  if (p === '/api/home/task-tracking') {
+    const today = todayISO();
+    const createdToday = (it) => {
+      const d = new Date(it.created_at);
+      if (Number.isNaN(d.getTime())) return false;
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` === today;
+    };
+    const byUser = {};
+    for (const it of DB.inventory) {
+      if (!createdToday(it)) continue;
+      for (const rmId of (it.assigned_rm_ids || [])) {
+        const u = DB.users.find((x) => x.id === rmId);
+        if (!u || u.is_active === false) continue; // match backend AND u.is_active
+        const b = byUser[rmId] || (byUser[rmId] = { id: u.id, name: u.name, email: u.email, role: u.role, total: 0, task1_worked: 0, task2_worked: 0 });
+        b.total += 1;
+        if (!['lead', 'unqualified'].includes(it.stage)) b.task1_worked += 1;
+        if (!['lead', 'unqualified', 'active'].includes(it.stage)) b.task2_worked += 1;
+      }
+    }
+    return { users: Object.values(byUser).sort((a, b) => (a.name || a.email).localeCompare(b.name || b.email)) };
+  }
+
   // Unknown — return empty so callers degrade gracefully.
   return null;
 }

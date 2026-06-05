@@ -2,6 +2,7 @@ import { useState } from 'react';
 import NoteThread from './NoteThread.jsx';
 import StatusEditModal from './StatusEditModal.jsx';
 import EditDetailsModal from './EditDetailsModal.jsx';
+import OhPrice from './OhPrice.jsx';
 import { formatDateShort, formatPrice, STAGE_DOT_COLOR, stageLabel, supplyReasonLabel, variation } from '../utils/format.js';
 
 function Field({ label, children }) {
@@ -54,9 +55,7 @@ export default function ExpandPanel({ item, role, onUpdated, canPost = true, sec
           <h4>💰 Pricing &amp; Source</h4>
           <div className="field-grid-2">
             <Field label="Asking"><span className="val-orange">{formatPrice(item.price)}</span></Field>
-            <Field label="OH Price">
-              {item.oh_price ? <span className="val-green">{formatPrice(item.oh_price)}</span> : <span className="muted">no match</span>}
-            </Field>
+            <Field label="OH Price"><OhPrice item={item} /></Field>
             <Field label="Variation">
               {v ? <span className={`val-var-${v.sign}`}>{v.label}</span> : '—'}
             </Field>

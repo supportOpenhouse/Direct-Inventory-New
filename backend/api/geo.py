@@ -117,6 +117,40 @@ def society_coords():
     return jsonify({"items": items, "count": len(items)})
 
 
+# Extracted micro-market coordinates — same approach as societies: a bundled
+# JSON of name → lat/lng (+ optional city), so we plot exact dots instead of
+# deriving a centroid from society coords. Drop the file in and restart; if it's
+# absent the endpoint falls back to the derived computation below.
+_MM_COORDS_PATH = os.path.join(os.path.dirname(__file__), "..", "migrations", "micromarket_coords.json")
+_MM_COORDS: list | None = None
+
+
+def _load_micromarket_coords() -> list:
+    global _MM_COORDS
+    if _MM_COORDS is not None:
+        return _MM_COORDS
+    out: list = []
+    try:
+        with open(_MM_COORDS_PATH, encoding="utf-8") as fh:
+            for r in json.load(fh):
+                name = (r.get("micro_market") or r.get("name") or "").strip()
+                lat, lng = r.get("latitude"), r.get("longitude")
+                if name and lat is not None and lng is not None:
+                    out.append({
+                        "name": name,
+                        "city": (r.get("city") or None),
+                        "center": [lat, lng],
+                        "geometry": None,
+                        "count": 1,
+                    })
+    except FileNotFoundError:
+        pass  # no extracted file → caller falls back to the derived computation
+    except Exception as e:
+        log.warning("micro-market coords load failed (%s): %s", _MM_COORDS_PATH, e)
+    _MM_COORDS = out
+    return out
+
+
 def _convex_hull(latlng_points):
     """Andrew's monotone chain. In/out are (lat, lng) tuples; computed on (lng,lat)."""
     pts = sorted(set((lng, lat) for (lat, lng) in latlng_points))
@@ -150,14 +184,22 @@ _MM_CACHE: list | None = None
 def micro_markets():
     """Per micro-market: { name, center: [lat,lng], geometry: Polygon|null, count }.
 
-    Center = mean of its societies' coords (the dot); geometry = convex hull of
-    those coords (the zoomed-in border). Derived by joining the bundled society
-    coords to PROPERTIES_DB.master_societies (society_name → micro_market).
+    Prefers extracted micro-market coords from the bundled micromarket_coords.json
+    (exact dots, no processing — same as societies). If that file is absent, falls
+    back to deriving each centre from the mean of its societies' coords (joined to
+    PROPERTIES_DB.master_societies) with a convex-hull geometry.
     """
     global _MM_CACHE
     if _MM_CACHE is not None:
         return jsonify({"items": _MM_CACHE})
 
+    # Preferred: exact extracted coordinates.
+    extracted = _load_micromarket_coords()
+    if extracted:
+        _MM_CACHE = extracted
+        return jsonify({"items": extracted})
+
+    # Fallback: derive from society coords + master_societies.
     by_name: dict[str, list] = {}
     for c in _load_society_coords():
         by_name.setdefault(c["name"].strip().lower(), []).append((c["lat"], c["lng"]))

@@ -187,6 +187,9 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2);
 .val-amber { color: var(--amber-fg); font-weight: 600; }
 /* OH price when asking ≈ OH (variation within ±0.5%) — brown. */
 .val-brown { color: var(--amber-fg); font-weight: 600; }
+/* No confident OH match → "Check Price" (brown) + grey reason sub-text. */
+.val-check { color: var(--amber-fg); font-weight: 600; }
+.oh-reason { display: block; font-size: 10.5px; font-weight: 500; color: var(--text-faint); margin-top: 1px; letter-spacing: .01em; }
 .val-var-pos { color: var(--red-fg); font-weight: 600; }   /* asking OVER OH  → red  */
 .val-var-neg { color: var(--green-fg); font-weight: 600; } /* asking UNDER OH → green */
 .val-var-flat { color: var(--amber-fg); }                  /* ≈ equal (~)     → brown */

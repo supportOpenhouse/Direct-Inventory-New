@@ -3,6 +3,7 @@ import { api } from '../api/client.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import ExpandPanel from '../components/ExpandPanel.jsx';
 import FilterPanel from '../components/FilterPanel.jsx';
+import OhPrice from '../components/OhPrice.jsx';
 import { CITIES, displayCity, formatPrice, starColor, variation } from '../utils/format.js';
 import { IconFilter, IconSearch } from '../components/icons.jsx';
 
@@ -113,7 +114,7 @@ export default function QualifiedLeads() {
                     <td>{it.floor || '—'}</td>
                     <td>{it.area_sqft != null ? `${it.area_sqft} sqft` : '—'}</td>
                     <td className="inv-td-num val-orange">{formatPrice(it.price)}</td>
-                    <td className={`inv-td-num ${it.oh_price ? 'val-green' : 'muted'}`}>{it.oh_price ? formatPrice(it.oh_price) : '—'}</td>
+                    <td className="inv-td-num"><OhPrice item={it} /></td>
                     <td className={`inv-td-num ${v ? `val-var-${v.sign}` : 'muted'}`}>{v ? v.label : '—'}</td>
                   </tr>
                   {isOpen && (

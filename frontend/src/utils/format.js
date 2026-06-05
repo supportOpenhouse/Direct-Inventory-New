@@ -298,3 +298,36 @@ export function variation(asking, oh) {
   const label = `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
   return { pct, label, sign };
 }
+
+// OH Price cell state — single source of truth for what the price cell shows.
+// A real match shows the green price; otherwise "Check Price" with a reason
+// sub-text + tooltip. Driven by the backend's oh_price / oh_price_reason /
+// oh_near_diff (a strict society + exact BHK + area ±50 lookup; never a guess).
+export function ohMatchInfo(item) {
+  if (item.oh_price != null) {
+    const bhk = item.oh_price_bhk;
+    const area = item.oh_price_area;
+    const diff = (area != null && item.area_sqft != null) ? Math.abs(area - item.area_sqft) : null;
+    const parts = [
+      bhk != null ? `${bhk}BHK` : null,
+      area != null ? `${area}sqft` : null,
+    ].filter(Boolean).join(' ');
+    const title = `Matched${parts ? ` ${parts}` : ''}${diff != null ? ` (±${diff} sqft)` : ''}`;
+    return { matched: true, sub: null, title };
+  }
+  switch (item.oh_price_reason) {
+    case 'area_off': {
+      const n = item.oh_near_diff;
+      return {
+        matched: false, sub: 'area off',
+        title: n != null
+          ? `Nearest priced area is ${n} sqft off (>50) — open card to verify`
+          : 'Nearest priced area is >50 sqft off — open card to verify',
+      };
+    }
+    case 'no_area':
+      return { matched: false, sub: 'no area', title: "Listing has no area, so it can't be area-matched" };
+    default: // 'no_match' (or missing)
+      return { matched: false, sub: 'no match', title: 'No OH price for this society + BHK' };
+  }
+}

@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api/client.js';
+import { useAuth } from '../contexts/AuthContext.jsx';
 import { IconClose } from './icons.jsx';
 
 // Floors offered in the picker (mirrors AddInventoryModal): Ground, Top, 1–50.
@@ -9,8 +10,12 @@ const BASE_FLOORS = ['Ground', 'Top', ...Array.from({ length: 50 }, (_, i) => St
  * Edit the raw property + seller fields of one inventory row. Reached from the
  * "✎ Edit Details" button in the ExpandPanel's Property Details column. Only the
  * fields the user actually changed are PATCHed (the backend skips no-ops anyway).
+ * Admins additionally get to view / change the assigned RM.
  */
 export default function EditDetailsModal({ item, onUpdated, onClose }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+
   const [f, setF] = useState({
     area_sqft: item.area_sqft ?? '',
     bedrooms: item.bedrooms ?? '',
@@ -23,6 +28,26 @@ export default function EditDetailsModal({ item, onUpdated, onClose }) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+
+  // Assigned RM (admin only). Pre-select the row's current (primary) RM.
+  const currentRm = (item.assigned_rms && item.assigned_rms[0]) || null;
+  const currentRmId = (item.assigned_rm_ids && item.assigned_rm_ids[0]) ?? (currentRm?.id ?? null);
+  const [rms, setRms] = useState([]);
+  const [rmId, setRmId] = useState(currentRmId != null ? String(currentRmId) : '');
+
+  useEffect(() => {
+    if (!isAdmin) return undefined;
+    let alive = true;
+    api.get('/api/users?role=rm')
+      .then((r) => { if (alive) setRms((r.items || []).filter((u) => u.is_active !== false)); })
+      .catch(() => { /* dropdown just stays empty */ });
+    return () => { alive = false; };
+  }, [isAdmin]);
+
+  // Keep the current RM selectable even if it's now inactive (not in the list).
+  const rmOptions = currentRm && !rms.some((u) => u.id === currentRm.id)
+    ? [{ id: currentRm.id, name: currentRm.name, email: currentRm.email }, ...rms]
+    : rms;
 
   function set(k, v) { setF((p) => ({ ...p, [k]: v })); }
 
@@ -48,11 +73,21 @@ export default function EditDetailsModal({ item, onUpdated, onClose }) {
     for (const [k, v] of Object.entries(next)) {
       if (v !== (item[k] ?? null)) body[k] = v;
     }
-    if (Object.keys(body).length === 0) { onClose(); return; }
+    const rmChanged = isAdmin && rmId !== (currentRmId != null ? String(currentRmId) : '');
+    if (Object.keys(body).length === 0 && !rmChanged) { onClose(); return; }
     try {
       setSaving(true);
-      const r = await api.patch(`/api/inventory/${item.oh_id}`, body);
-      onUpdated(r.item || { ...item, ...body });
+      let result = null;
+      if (Object.keys(body).length > 0) {
+        const r = await api.patch(`/api/inventory/${item.oh_id}`, body);
+        result = r.item || { ...item, ...body };
+      }
+      // Reassign via the dedicated endpoint so the manager is kept in sync.
+      if (rmChanged) {
+        const r2 = await api.put(`/api/inventory/${item.oh_id}/assigned-rms`, { rm_ids: rmId ? [Number(rmId)] : [] });
+        result = r2.item || result;
+      }
+      onUpdated(result || { ...item, ...body });
       onClose();
     } catch (e) {
       setError(e.data?.error || e.message);
@@ -94,6 +129,21 @@ export default function EditDetailsModal({ item, onUpdated, onClose }) {
           <div><label>Seller Name</label><input type="text" value={f.seller_name} onChange={(e) => set('seller_name', e.target.value)} /></div>
           <div><label>Phone No.</label><input type="tel" maxLength={10} value={f.seller_phone} onChange={(e) => set('seller_phone', e.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="10-digit" /></div>
         </div>
+
+        {isAdmin && (
+          <>
+            <h4 className="edit-sec-h">🧑‍💼 Assigned RM</h4>
+            <div className="form-grid">
+              <div>
+                <label>Assigned RM <span className="muted">(currently: {currentRm?.name || currentRm?.email || rms.find((u) => u.id === currentRmId)?.name || (currentRmId != null ? `#${currentRmId}` : 'Unassigned')})</span></label>
+                <select value={rmId} onChange={(e) => setRmId(e.target.value)}>
+                  <option value="">— Unassigned —</option>
+                  {rmOptions.map((u) => <option key={u.id} value={String(u.id)}>{u.name || u.email}</option>)}
+                </select>
+              </div>
+            </div>
+          </>
+        )}
 
         {error && <div className="modal-error">{error}</div>}
         <div className="modal-actions">

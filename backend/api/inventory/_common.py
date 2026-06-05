@@ -401,12 +401,30 @@ def _build_filters(user: dict, args, alias: str = ""):
 # Common subquery: inventory + best-matching OH Pricing row, with match_kind.
 # We always wrap this in an outer SELECT so variation filters (which reference
 # oh_price) can be applied uniformly across list / counts / count_total.
-INVENTORY_WITH_PRICING_SQL = """
+# OH Price = a strict lookup into the manually-maintained oh_pricing sheet, NOT a
+# computed/per-sqft number. A listing gets a price only when ALL hold:
+#   1. society  — exact (LOWER(TRIM(society)) = op.society_norm)
+#   2. bhk      — exact (op.bhk = i.bedrooms)
+#   3. area     — within ±50 sqft (hard cliff)
+# LATERAL `p` is that strict match (sets oh_price; closest area wins). LATERAL `d`
+# is diagnostics only — the nearest priced (society+bhk) row IGNORING the ±50 gate
+# — and NEVER sets the price; it powers oh_near_diff and the area_off reason.
+# oh_price_reason: match | no_area | area_off | no_match (see OH Price handover).
+OH_AREA_TOLERANCE = 50
+
+INVENTORY_WITH_PRICING_SQL = f"""
     SELECT i.*,
            p.acq_price    AS oh_price,
            p.area_sqft    AS oh_price_area,
            p.bhk          AS oh_price_bhk,
-           p.match_kind   AS oh_price_match,
+           'exact'        AS oh_price_match,
+           CASE
+             WHEN p.acq_price IS NOT NULL THEN 'match'
+             WHEN i.area_sqft IS NULL     THEN 'no_area'
+             WHEN d.acq_price IS NOT NULL THEN 'area_off'
+             ELSE 'no_match'
+           END            AS oh_price_reason,
+           d.near_diff    AS oh_near_diff,
            COALESCE(
                (SELECT json_agg(
                            json_build_object('id', u.id, 'name', u.name, 'email', u.email)
@@ -418,23 +436,31 @@ INVENTORY_WITH_PRICING_SQL = """
            ) AS assigned_rms
     FROM inventory i
     LEFT JOIN LATERAL (
-        SELECT op.acq_price, op.area_sqft, op.bhk,
-               CASE
-                 WHEN i.area_sqft IS NULL OR op.area_sqft IS NULL THEN 'no_area'
-                 WHEN ABS(op.area_sqft - i.area_sqft) <= 150       THEN 'exact'
-                 ELSE 'nearest'
-               END AS match_kind
+        -- Strict match: society + exact BHK + area within ±{OH_AREA_TOLERANCE} sqft.
+        SELECT op.acq_price, op.area_sqft, op.bhk
         FROM oh_pricing op
         WHERE op.society_norm = LOWER(TRIM(i.society))
           AND op.acq_price IS NOT NULL
-          AND (op.bhk IS NULL OR i.bedrooms IS NULL OR op.bhk = i.bedrooms)
-        ORDER BY
-          (CASE WHEN op.bhk = i.bedrooms THEN 0 ELSE 1 END),
-          (CASE WHEN op.area_sqft IS NULL OR i.area_sqft IS NULL
-                THEN 9999
-                ELSE ABS(op.area_sqft - i.area_sqft) END)
+          AND op.bhk = i.bedrooms
+          AND i.area_sqft IS NOT NULL AND op.area_sqft IS NOT NULL
+          AND ABS(op.area_sqft - i.area_sqft) <= {OH_AREA_TOLERANCE}
+        ORDER BY ABS(op.area_sqft - i.area_sqft)
         LIMIT 1
     ) p ON TRUE
+    LEFT JOIN LATERAL (
+        -- Diagnostic: nearest priced (society + BHK) row, ignoring the ±{OH_AREA_TOLERANCE} gate.
+        -- Tells area_off (a price exists) from no_match, and gives the sqft gap.
+        SELECT op.acq_price,
+               CASE WHEN op.area_sqft IS NOT NULL AND i.area_sqft IS NOT NULL
+                    THEN ABS(op.area_sqft - i.area_sqft) END AS near_diff
+        FROM oh_pricing op
+        WHERE op.society_norm = LOWER(TRIM(i.society))
+          AND op.acq_price IS NOT NULL
+          AND op.bhk = i.bedrooms
+        ORDER BY (CASE WHEN op.area_sqft IS NULL OR i.area_sqft IS NULL
+                       THEN 9999 ELSE ABS(op.area_sqft - i.area_sqft) END)
+        LIMIT 1
+    ) d ON TRUE
 """
 
 # Selects one inventory row with its assigned_rms json, in the same shape the

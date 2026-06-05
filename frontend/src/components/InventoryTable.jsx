@@ -1,6 +1,7 @@
 import { Fragment, useState } from 'react';
 import { api } from '../api/client.js';
 import ExpandPanel from './ExpandPanel.jsx';
+import OhPrice from './OhPrice.jsx';
 import {
   displayCity, formatDateRel, formatDateShort, formatPrice, isCreatedToday, reasonLabelAny, rowFlag, starColor,
   STAGE_DOT_COLOR, stageLabel, variation,
@@ -171,7 +172,7 @@ export default function InventoryTable({
                   <td>{item.floor || '—'}</td>
                   <td className="inv-col-area">{item.area_sqft != null ? `${item.area_sqft} sqft` : '—'}</td>
                   <td className="inv-td-num val-orange inv-col-asking">{formatPrice(item.price)}</td>
-                  <td className={`inv-td-num ${item.oh_price ? (v && v.sign === 'flat' ? 'val-brown' : 'val-green') : 'muted'}`}>{item.oh_price ? formatPrice(item.oh_price) : '—'}</td>
+                  <td className="inv-td-num"><OhPrice item={item} /></td>
                   <td className={`inv-td-num ${v ? `val-var-${v.sign}` : 'muted'}`}>{v ? v.label : '—'}</td>
                   <td className="inv-col-stage">
                     <span className="stage-dot" style={{ background: STAGE_DOT_COLOR[item.stage] }} />{stageLabel(item.stage)}
