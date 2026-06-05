@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { rejectReasonLabel, stageLabel, STAGE_DOT_COLOR, SUPPLY_STAGES } from '../utils/format.js';
 import InventoryBoard from '../components/InventoryBoard.jsx';
-import { IconLeads, IconFollowUp, IconPipeline, IconRejected, IconQualified, IconVisit } from '../components/icons.jsx';
+import { IconLeads, IconFollowUp, IconPipeline, IconRejected, IconQualified, IconVisit, IconLock } from '../components/icons.jsx';
 
 const REJECTED_TOP = 3;
 
@@ -30,36 +30,54 @@ function QuadCard({ color, Icon, title, to, children }) {
 }
 
 // One Today's-Task card: how many of the rows that sat in this stage at the
-// start of the day have since been worked (moved to a different stage).
-function TaskCard({ color, Icon, title, total, worked, loading }) {
+// start of the day have since been worked (moved to a different stage). When
+// `locked`, the content is dimmed and a full-opacity lock overlays it — the
+// lock is a SIBLING of the dimmed content (parent opacity would otherwise cap
+// the child's opacity).
+function TaskCard({ color, Icon, title, total, worked, loading, locked = false, onMouseEnter, onMouseLeave }) {
   const pct = total > 0 ? Math.round((worked / total) * 100) : 0;
   return (
-    <div className="task-card" style={{ '--tc': color }}>
-      <div className="tc-head">
-        <span className="tc-ic" style={{ color }}><Icon size={18} /></span>
-        <h4>{title}</h4>
+    <div className={`task-card ${locked ? 'task-card-locked' : ''}`} style={{ '--tc': color }}
+      onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
+      <div className="tc-content">
+        <div className="tc-head">
+          <span className="tc-ic" style={{ color }}><Icon size={18} /></span>
+          <h4>{title}</h4>
+        </div>
+        <div className="tc-frac">
+          <span className="tc-worked">{loading ? '—' : worked}</span>
+          <span className="tc-of">/ {loading ? '—' : total}</span>
+          <span className="tc-frac-lbl">worked</span>
+        </div>
+        <div className="tc-bar"><div className="tc-bar-fill" style={{ width: `${loading ? 0 : pct}%` }} /></div>
+        <div className="tc-sub">{loading ? '—' : `${total} at start of day · ${pct}% done`}</div>
       </div>
-      <div className="tc-frac">
-        <span className="tc-worked">{loading ? '—' : worked}</span>
-        <span className="tc-of">/ {loading ? '—' : total}</span>
-        <span className="tc-frac-lbl">worked</span>
-      </div>
-      <div className="tc-bar"><div className="tc-bar-fill" style={{ width: `${loading ? 0 : pct}%` }} /></div>
-      <div className="tc-sub">{loading ? '—' : `${total} at start of day · ${pct}% done`}</div>
+      {locked && <span className="tc-lock" aria-label="Locked"><IconLock size={26} /></span>}
     </div>
   );
 }
 
 function TodaysTask({ task, loading }) {
+  const total1 = task?.leads?.total ?? 0;
+  const worked1 = task?.leads?.worked ?? 0;
+  // Task 1 is done when every new lead is worked (also vacuously when there are
+  // none: 0 >= 0). Task 2 stays locked until then.
+  const task2Locked = !loading && worked1 < total1;
+  const [showToast, setShowToast] = useState(false);
+
   return (
     <section className="todays-task">
       <h2 className="tt-title">Today's Task</h2>
       <div className="task-grid">
-        <TaskCard color="#fa541c" Icon={IconLeads} title="New Leads Added"
-          total={task?.leads?.total ?? 0} worked={task?.leads?.worked ?? 0} loading={loading} />
-        <TaskCard color="#f59e0b" Icon={IconQualified} title="New Active Leads Added"
-          total={task?.active?.total ?? 0} worked={task?.active?.worked ?? 0} loading={loading} />
+        <TaskCard color="#fa541c" Icon={IconLeads} title="TASK 1 : NEW LEADS → ACTIVE LEADS"
+          total={total1} worked={worked1} loading={loading} />
+        <TaskCard color="#f59e0b" Icon={IconQualified} title="TASK 2 : NEW ACTIVE LEADS → QUALIFIED LEADS"
+          total={task?.active?.total ?? 0} worked={task?.active?.worked ?? 0} loading={loading}
+          locked={task2Locked}
+          onMouseEnter={() => task2Locked && setShowToast(true)}
+          onMouseLeave={() => setShowToast(false)} />
       </div>
+      {showToast && <div className="task-toast">COMPLETE TASK 1 FIRST</div>}
     </section>
   );
 }

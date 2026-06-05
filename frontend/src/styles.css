@@ -302,6 +302,14 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2);
 .tc-bar { height: 6px; border-radius: 99px; background: var(--surface-3); overflow: hidden; margin: 12px 0 8px; }
 .tc-bar-fill { height: 100%; border-radius: 99px; background: var(--tc, var(--brand)); transition: width .4s ease; }
 .tc-sub { font-size: 12.5px; color: var(--text-muted); }
+/* locked task card — dim the content, keep the lock at full opacity */
+.task-card-locked { cursor: not-allowed; }
+.task-card-locked .tc-content { opacity: .4; }
+.tc-lock { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--text-2); opacity: 1; z-index: 2; pointer-events: none; }
+/* hover toast for the locked task */
+.task-toast { position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%); z-index: 1200;
+  background: rgba(15, 23, 42, 0.95); color: #fff; padding: 11px 20px; border-radius: 10px;
+  font-size: 12.5px; font-weight: 700; letter-spacing: .05em; box-shadow: var(--shadow-md); }
 
 /* ── home: view toggle + quadrants ───────────────────────────────────── */
 .home-viewbar { display: flex; justify-content: flex-end; margin-bottom: 14px; }
