@@ -1,7 +1,29 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { stageLabel } from '../utils/format.js';
 import { IconClose } from './icons.jsx';
+
+// Inventory fields the Forms payload needs (first_name, contact_no, …). The
+// backend pulls these off the row, so if any are blank the Forms app rejects —
+// we check up-front and name the missing ones so the user can fill them via
+// "Edit Details" first.
+const REQUIRED_INV_FIELDS = [
+  ['seller_name', 'Seller Name'],
+  ['seller_phone', 'Contact No.'],
+  ['society', 'Society'],
+  ['locality', 'Locality'],
+  ['area_sqft', 'Area (sqft)'],
+  ['price', 'Demand Price'],
+  ['bedrooms', 'Configuration (BHK)'],
+];
+
+function fmtDateTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
+}
 
 /**
  * Visit-schedule flow (ported). Date + time + field exec (+ assigned-by for
@@ -22,6 +44,21 @@ export default function VisitScheduleModal({ item, onClose, onScheduled }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [pendingUnits, setPendingUnits] = useState(null);
+  const [existing, setExisting] = useState(null);
+
+  // Required fields that are currently blank — form inputs + inventory fields.
+  function missingFields() {
+    const miss = [];
+    if (!date) miss.push('Date');
+    if (!time) miss.push('Time');
+    if (!execPhone) miss.push('Field Exec');
+    if (isAdmin && !assignedBy) miss.push('Assigned By');
+    for (const [k, label] of REQUIRED_INV_FIELDS) {
+      const v = item?.[k];
+      if (v === null || v === undefined || String(v).trim() === '') miss.push(label);
+    }
+    return miss;
+  }
 
   useEffect(() => {
     let alive = true;
@@ -48,15 +85,15 @@ export default function VisitScheduleModal({ item, onClose, onScheduled }) {
       });
       onScheduled(r);
     } catch (e) {
-      if (e.status === 409 && e.data?.existing_visit) { alert(`Visit already scheduled for ${item.oh_id}.`); onClose(); return; }
+      if (e.status === 409 && e.data?.existing_visit) { setExisting(e.data.existing_visit); return; }
       setError(e.data?.error || e.message || 'Could not schedule the visit');
     } finally { setSubmitting(false); }
   }
 
   async function submit() {
     setError(null);
-    if (!date || !time || !execPhone) { setError('Date, Time and Field Exec are required'); return; }
-    if (isAdmin && !assignedBy) { setError('Pick who this visit is assigned by'); return; }
+    const miss = missingFields();
+    if (miss.length) { setError(`Missing required field${miss.length > 1 ? 's' : ''}: ${miss.join(', ')}`); return; }
     const society = (item.society || '').trim();
     if (!society) { await sendSchedule(); return; }
     try {
@@ -68,6 +105,24 @@ export default function VisitScheduleModal({ item, onClose, onScheduled }) {
     } catch (e) {
       setError(`Couldn't check existing units: ${e.data?.error || e.message}`);
     } finally { setSubmitting(false); }
+  }
+
+  if (existing) {
+    return (
+      <div className="modal-backdrop" onClick={onClose}>
+        <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-head-row"><h3>Visit Already Scheduled</h3><button className="modal-close" onClick={onClose}><IconClose /></button></div>
+          <p className="modal-sub">A visit is already booked for <strong>{item.oh_id}</strong>{item.society ? ` · ${item.society}` : ''}.</p>
+          <div className="field-grid-2" style={{ marginTop: 6 }}>
+            <div className="field-row"><span className="field-lbl">Scheduled for</span><span className="field-val">{fmtDateTime(existing.visit_at)}</span></div>
+            <div className="field-row"><span className="field-lbl">Field exec</span><span className="field-val">{existing.visit_exec || '—'}</span></div>
+            <div className="field-row"><span className="field-lbl">Stage</span><span className="field-val">{existing.stage ? stageLabel(existing.stage) : '—'}</span></div>
+            <div className="field-row"><span className="field-lbl">Visit ID</span><span className="field-val">{existing.forms_visit_id || '—'}</span></div>
+          </div>
+          <div className="modal-actions"><span style={{ flex: 1 }} /><button className="btn-primary" onClick={onClose}>Close</button></div>
+        </div>
+      </div>
+    );
   }
 
   if (pendingUnits && pendingUnits.length > 0) {

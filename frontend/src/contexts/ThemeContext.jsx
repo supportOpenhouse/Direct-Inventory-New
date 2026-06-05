@@ -6,7 +6,9 @@ const KEY = 'di_theme';
 function initialTheme() {
   const saved = localStorage.getItem(KEY);
   if (saved === 'light' || saved === 'dark') return saved;
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  // Default to light regardless of the OS preference; a user's explicit
+  // toggle is still remembered via localStorage.
+  return 'light';
 }
 
 export function ThemeProvider({ children }) {
