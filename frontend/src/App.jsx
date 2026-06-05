@@ -13,6 +13,7 @@ import Report from './pages/Report.jsx';
 import ReportDetail from './pages/ReportDetail.jsx';
 import Users from './pages/Users.jsx';
 import Logs from './pages/Logs.jsx';
+import TrackTasks from './pages/TrackTasks.jsx';
 import MyProfile from './pages/MyProfile.jsx';
 
 function RequireAuth({ children, roles }) {
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="/profile" element={<MyProfile />} />
         <Route path="/users" element={<RequireAuth roles={[]}><Users /></RequireAuth>} />
         <Route path="/logs" element={<RequireAuth roles={[]}><Logs /></RequireAuth>} />
+        <Route path="/track-tasks" element={<RequireAuth roles={[]}><TrackTasks /></RequireAuth>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

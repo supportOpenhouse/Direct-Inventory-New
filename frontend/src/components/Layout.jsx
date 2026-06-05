@@ -7,7 +7,7 @@ import CpScanButton from './CpScanButton.jsx';
 import ReassignLeadsButton from './ReassignLeadsButton.jsx';
 import {
   IconHome, IconLeads, IconQualified, IconFollowUp, IconVisit, IconPipeline, IconRejected,
-  IconReport, IconUsers, IconLogs, IconSun, IconMoon, IconMenu, IconLogout, IconChevron,
+  IconReport, IconUsers, IconLogs, IconTasks, IconSun, IconMoon, IconMenu, IconLogout, IconChevron,
 } from './icons.jsx';
 
 const PRIMARY = [
@@ -24,7 +24,8 @@ const TITLES = {
   '': 'Home', leads: 'Leads', 'qualified-leads': 'Qualified Leads', 'follow-ups': 'Follow Ups', 'visit-scheduled': 'Visit Scheduled',
   pipeline: 'Supply Closure Tracker',
   'post-token': 'Post Token', rejected: 'Rejected', report: 'Report',
-  'my-report': 'My Report', users: 'Users', logs: 'Activity Logs', profile: 'My Profile',
+  'my-report': 'My Report', users: 'Users', logs: 'Activity Logs',
+  'track-tasks': 'Track Tasks', profile: 'My Profile',
 };
 
 function initials(name, email) {
@@ -87,6 +88,7 @@ export default function Layout() {
         {isAdmin && (
           <>
             <div className="sidebar-section-label">Admin</div>
+            {navItem({ to: '/track-tasks', label: 'Track Tasks', Icon: IconTasks })}
             {navItem({ to: '/users', label: 'Users', Icon: IconUsers })}
             {navItem({ to: '/logs', label: 'Logs', Icon: IconLogs })}
           </>

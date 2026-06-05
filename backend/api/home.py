@@ -206,3 +206,38 @@ def summary():
         })
     finally:
         conn.close()
+
+
+@bp.get("/task-tracking")
+@require_auth("admin")
+def task_tracking():
+    """Admin-only: per-user Today's Task progress.
+
+    For every active RM with at least one lead CREATED today (IST), report how
+    many of those leads they've moved past 'lead' (Task 1: lead→active) and past
+    'active' (Task 2: active→qualified). total = their leads created today.
+    Multi-RM leads count toward each assignee. Admin sees all (no scope).
+
+    Response: { users: [{ id, name, email, role, total, task1_worked, task2_worked }] }
+    """
+    conn = get_conn()
+    try:
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT u.id, u.name, u.email, u.role,
+                       COUNT(*)                                            AS total,
+                       COUNT(*) FILTER (WHERE i.stage <> 'lead')           AS task1_worked,
+                       COUNT(*) FILTER (WHERE i.stage NOT IN ('lead','active')) AS task2_worked
+                FROM inventory i
+                JOIN LATERAL unnest(i.assigned_rm_ids) AS rm_id ON TRUE
+                JOIN users u ON u.id = rm_id AND u.is_active = TRUE
+                WHERE (i.created_at AT TIME ZONE 'Asia/Kolkata')::DATE = {_TODAY_IST}
+                GROUP BY u.id, u.name, u.email, u.role
+                ORDER BY u.name NULLS LAST, u.email
+                """,
+            )
+            users = cur.fetchall()
+    finally:
+        conn.close()
+    return jsonify({"users": users})
