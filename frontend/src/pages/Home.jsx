@@ -78,13 +78,17 @@ function TaskCard({ color, Icon, title, total, worked, loading, locked = false, 
   );
 }
 
-function TodaysTask({ task, loading, isAdmin = false }) {
+function TodaysTask({ task, loading, role }) {
+  const isAdmin = role === 'admin';
   const total1 = task?.leads?.total ?? 0;
   const worked1 = task?.leads?.worked ?? 0;
   // Task 1 is done when every new lead is worked (also vacuously when there are
   // none: 0 >= 0). Task 2 stays locked until then — except for admins, who are
   // never gated.
   const task2Locked = !loading && !isAdmin && worked1 < total1;
+  // Where a clicked card goes: admins → Track Tasks (their overview), RMs → the
+  // Leads board to work them. Managers have no destination → non-clickable.
+  const taskTo = isAdmin ? '/track-tasks' : (role === 'rm' ? '/leads' : undefined);
   const [showToast, setShowToast] = useState(false);
 
   return (
@@ -93,11 +97,11 @@ function TodaysTask({ task, loading, isAdmin = false }) {
       <div className="task-grid">
         <TaskCard color="#fa541c" Icon={IconLeads} title="TASK 1 : NEW LEADS → ACTIVE LEADS"
           total={total1} worked={worked1} loading={loading}
-          to={isAdmin ? '/track-tasks' : undefined} />
+          to={taskTo} />
         <TaskCard color="#f59e0b" Icon={IconQualified} title="TASK 2 : NEW ACTIVE LEADS → QUALIFIED LEADS"
           total={task?.active?.total ?? 0} worked={task?.active?.worked ?? 0} loading={loading}
           locked={task2Locked}
-          to={isAdmin ? '/track-tasks' : undefined}
+          to={taskTo}
           onMouseEnter={() => task2Locked && setShowToast(true)}
           onMouseLeave={() => setShowToast(false)} />
       </div>
@@ -204,7 +208,6 @@ function BoardView({ s, loading }) {
 
 export default function Home() {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
   const [view, setView] = useState('board'); // board | table
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -231,7 +234,7 @@ export default function Home() {
       <div className="home-viewbar">{toggle}</div>
       {view === 'board' ? (
         <>
-          <TodaysTask task={summary?.todays_task} loading={loading} isAdmin={isAdmin} />
+          <TodaysTask task={summary?.todays_task} loading={loading} role={user?.role} />
           <div className="page-head"><h2>Summary</h2></div>
           <BoardView s={summary} loading={loading} />
         </>

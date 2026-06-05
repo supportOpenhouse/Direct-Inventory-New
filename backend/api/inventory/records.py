@@ -300,6 +300,32 @@ def update_one(oh_id: str):
             for k, v in body.items():
                 if k not in allowed:
                     continue
+                # Re-follow-up: the lead stays in 'follow_up' but a NEW follow-up
+                # date is set. The stage column doesn't change (so no UPDATE for
+                # it), yet it's genuine work — emit a stage_change anyway so it
+                # surfaces in the user report (which only counts stage_change
+                # rows). The follow_up_at change is written/logged on its own
+                # iteration below.
+                if k == "stage" and v == "follow_up" and existing.get("stage") == "follow_up":
+                    new_fu = body.get("follow_up_at")
+                    if new_fu and str(existing.get("follow_up_at") or "")[:10] != str(new_fu)[:10]:
+                        log_activity(
+                            cur,
+                            actor_user_id=user["id"],
+                            actor_email=user["email"],
+                            entity_type="inventory",
+                            entity_id=oh_id,
+                            action="stage_change",
+                            field="stage",
+                            before_value="follow_up",
+                            after_value="follow_up",
+                            metadata={
+                                "actor_role": user["role"],
+                                "cross_assignment": cross_assignment_edit,
+                                "re_follow_up": True,
+                            },
+                        )
+                    continue
                 if existing.get(k) == v:
                     continue
                 if k == "priority" and user["role"] not in PRIORITY_ROLES:
