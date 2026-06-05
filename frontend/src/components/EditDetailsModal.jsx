@@ -149,7 +149,7 @@ export default function EditDetailsModal({ item, onUpdated, onClose }) {
         <div className="modal-actions">
           <span style={{ flex: 1 }} />
           <button className="btn-ghost" onClick={onClose} disabled={saving}>Cancel</button>
-          <button className="btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+          <button className="btn-primary" onClick={save} disabled={saving}>{saving ? <><span className="btn-spinner" />Saving…</> : 'Save'}</button>
         </div>
       </div>
     </div>

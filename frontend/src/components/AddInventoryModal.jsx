@@ -100,7 +100,7 @@ export default function AddInventoryModal({ onClose, onAdded }) {
         <div className="modal-actions">
           <span style={{ flex: 1 }} />
           <button className="btn-ghost" onClick={onClose} disabled={submitting}>Cancel</button>
-          <button className="btn-primary" onClick={submit} disabled={submitting}>{submitting ? 'Adding…' : 'Add Inventory'}</button>
+          <button className="btn-primary" onClick={submit} disabled={submitting}>{submitting ? <><span className="btn-spinner" />Adding…</> : 'Add Inventory'}</button>
         </div>
       </div>
     </div>

@@ -393,6 +393,8 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2);
 .reload-icon { display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
 .reload-icon-spinning { animation: spin .7s linear infinite; transform-origin: 50% 50%; }
 @keyframes spin { to { transform: rotate(360deg); } }
+/* Inline spinner for buttons that block on a network save. Inherits text color. */
+.btn-spinner { display: inline-block; width: 13px; height: 13px; margin-right: 7px; vertical-align: -2px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .6s linear infinite; }
 
 /* ── inventory table ─────────────────────────────────────────────────── */
 .inv-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: auto; box-shadow: var(--shadow-sm); }

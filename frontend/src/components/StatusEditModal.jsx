@@ -88,7 +88,7 @@ export default function StatusEditModal({ item, onUpdated, onClose }) {
             <span style={{ flex: 1 }} />
             <button className="btn-ghost" onClick={onClose} disabled={saving}>Cancel</button>
             <button className="btn-primary" onClick={save} disabled={saving}>
-              {needsVisit ? 'Schedule Visit →' : (saving ? 'Saving…' : 'Save')}
+              {needsVisit ? 'Schedule Visit →' : (saving ? <><span className="btn-spinner" />Saving…</> : 'Save')}
             </button>
           </div>
         </div>

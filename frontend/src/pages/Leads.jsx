@@ -238,7 +238,7 @@ export default function Leads() {
           {CITIES.map((c) => <button key={c} className={city === c ? 'tab tab-active' : 'tab'} onClick={() => setCity(c)}>{c}</button>)}
         </div>
         <form className="search-form" onSubmit={onSearch}>
-          <input value={qInput} onChange={(e) => setQInput(e.target.value)} placeholder="Search society, OH-ID, seller…" />
+          <input value={qInput} onChange={(e) => setQInput(e.target.value)} placeholder="Search any field — e.g. 1003 D2 Sahaj" />
           <button type="submit" className="btn-primary"><IconSearch size={16} /> Search</button>
           {qApplied && <button type="button" className="btn-ghost" onClick={() => { setQInput(''); setQApplied(''); }}>Clear</button>}
         </form>

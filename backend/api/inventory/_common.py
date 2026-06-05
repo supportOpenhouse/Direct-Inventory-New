@@ -290,20 +290,24 @@ def _build_filters(user: dict, args, alias: str = ""):
         base_filters.append(f"AND %s = ANY({p}assigned_rm_ids)")
         base_params.append(int(rm_id))
     if q:
-        # Substring ("half") search: each whitespace-separated token must
-        # appear case-insensitively, anywhere, in at least one searchable
-        # column. LIKE wildcards (% _ \) in the token are escaped so they
-        # match literally.
-        search_cols = [
-            "oh_id", "society", "seller_name", "locality",
-            "city", "source", "listing_link",
+        # Substring ("half") search: each whitespace-separated token must appear
+        # case-insensitively, anywhere, in at least one searchable column — so a
+        # single box like "1003 d2 sahaj" matches a row whose unit_no=1003,
+        # tower=D2, seller_name=Sahaj (token-AND, field-OR). Numeric columns are
+        # cast to text so "1200" matches an area. LIKE wildcards (% _ \) in the
+        # token are escaped so they match literally.
+        text_cols = [
+            "oh_id", "society", "seller_name", "seller_phone", "locality",
+            "city", "source", "unit_no", "tower", "floor", "listing_link",
         ]
+        num_cols = ["bedrooms", "area_sqft"]
         for tok in q.split():
             esc = tok.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             like = f"%{esc}%"
-            ored = " OR ".join(f"{p}{c} ILIKE %s" for c in search_cols)
-            base_filters.append(f"AND ({ored})")
-            base_params.extend([like] * len(search_cols))
+            clauses = [f"{p}{c} ILIKE %s" for c in text_cols]
+            clauses += [f"{p}{c}::text ILIKE %s" for c in num_cols]
+            base_filters.append("AND (" + " OR ".join(clauses) + ")")
+            base_params.extend([like] * (len(text_cols) + len(num_cols)))
     if society:
         # Comma-separated list of canonical society names from the filter UI.
         # Match case-insensitively to absorb minor casing/whitespace drift.
