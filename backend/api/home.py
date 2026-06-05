@@ -164,7 +164,12 @@ def summary():
         tt_total = row["tt_total"]
         tt_task1_worked = row["tt_task1_worked"]
         task1_done = tt_task1_worked >= tt_total
-        tt_task2_worked = row["tt_task2_worked"] if task1_done else None
+        # Task 2 is gated behind Task 1 for RMs/managers (card locked + worked
+        # not computed). Admins are never gated, so always expose it for them.
+        if task1_done or g.user["role"] == "admin":
+            tt_task2_worked = row["tt_task2_worked"]
+        else:
+            tt_task2_worked = None
 
         supply = {
             "pipeline": row["sup_pipeline"],
