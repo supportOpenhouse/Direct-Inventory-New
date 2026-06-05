@@ -38,22 +38,24 @@ function DayLeadsModal({ email, date, onClose }) {
         {error && <div className="modal-error">{error}</div>}
         {!loading && !error && leads.length === 0 && <div className="al-empty">No actions.</div>}
         {!loading && leads.length > 0 && (
-          <table className="dr-table">
-            <thead><tr><th>Time</th><th>OH-ID</th><th>Society</th><th>City</th><th>Seller</th><th>From</th><th>Final</th><th>Current</th><th>Latest note</th></tr></thead>
-            <tbody>
-              {leads.map((l) => (
-                <tr key={l.oh_id}>
-                  <td>{fmtTime(l.last_change_at)}</td><td className="inv-td-id">{l.oh_id}</td><td>{l.society || '—'}</td><td>{displayCity(l.city) || '—'}</td><td>{l.seller_name || '—'}</td>
-                  <td><StagePill stage={l.from_stage} rejectReason={l.stage_reason} /></td>
-                  <td><StagePill stage={l.final_stage} rejectReason={l.stage_reason} /></td>
-                  <td>{l.current_stage === l.final_stage ? <span className="muted">same</span> : <StagePill stage={l.current_stage} rejectReason={l.stage_reason} />}</td>
-                  <td>{l.day_note?.body
-                    ? <span className="inv-clip" title={`${l.day_note.author_name || l.day_note.author_email || ''}${l.day_note.author_name || l.day_note.author_email ? ': ' : ''}${l.day_note.body}`}>{l.day_note.body}</span>
-                    : <span className="muted">—</span>}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="dr-table-wrap">
+            <table className="dr-table">
+              <thead><tr><th>Time</th><th>OH-ID</th><th>Society</th><th>City</th><th>Seller</th><th>From</th><th>Final</th><th>Current</th><th>Latest note</th></tr></thead>
+              <tbody>
+                {leads.map((l) => (
+                  <tr key={l.oh_id}>
+                    <td>{fmtTime(l.last_change_at)}</td><td className="inv-td-id">{l.oh_id}</td><td>{l.society || '—'}</td><td>{displayCity(l.city) || '—'}</td><td>{l.seller_name || '—'}</td>
+                    <td><StagePill stage={l.from_stage} rejectReason={l.stage_reason} /></td>
+                    <td><StagePill stage={l.final_stage} rejectReason={l.stage_reason} /></td>
+                    <td>{l.current_stage === l.final_stage ? <span className="muted">same</span> : <StagePill stage={l.current_stage} rejectReason={l.stage_reason} />}</td>
+                    <td>{l.day_note?.body
+                      ? <span className="inv-clip" title={`${l.day_note.author_name || l.day_note.author_email || ''}${l.day_note.author_name || l.day_note.author_email ? ': ' : ''}${l.day_note.body}`}>{l.day_note.body}</span>
+                      : <span className="muted">—</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
