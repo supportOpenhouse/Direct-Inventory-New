@@ -161,7 +161,16 @@ def summary():
             by_reason = {r["reason"]: r["n"] for r in cur.fetchall()}
 
             # Tickets needing this user's action (powers the Home third card).
-            unresolved_tickets = tickets_pending_count(cur, g.user)
+            # Fail-soft: if the tickets table isn't migrated yet, don't take the
+            # whole summary down — just report 0. A failed statement aborts the
+            # transaction, so use a SAVEPOINT to keep the conn usable.
+            try:
+                cur.execute("SAVEPOINT tickets_count")
+                unresolved_tickets = tickets_pending_count(cur, g.user)
+                cur.execute("RELEASE SAVEPOINT tickets_count")
+            except Exception:
+                cur.execute("ROLLBACK TO SAVEPOINT tickets_count")
+                unresolved_tickets = 0
 
         # Today's Task progress. Denominator = leads created today. Task 2's
         # worked count is only exposed once Task 1 is complete (gating); until
