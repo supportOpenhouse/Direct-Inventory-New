@@ -7,6 +7,18 @@ import OhPrice from '../components/OhPrice.jsx';
 import { CITIES, displayCity, formatPrice, starColor, variation } from '../utils/format.js';
 import { IconFilter, IconSearch } from '../components/icons.jsx';
 
+function formatAssignedRms(rms) {
+  if (!Array.isArray(rms) || rms.length === 0) return '—';
+  const first = rms[0];
+  const label = first.name || first.email || `#${first.id}`;
+  const extra = rms.length - 1;
+  return extra > 0 ? `${label} +${extra}` : label;
+}
+function assignedRmsTitle(rms) {
+  if (!Array.isArray(rms) || rms.length === 0) return '';
+  return rms.map((r) => r.name || r.email || `#${r.id}`).join(', ');
+}
+
 function StarCell({ item, canSet, onUpdated }) {
   const color = starColor(item);
   if (!color && !canSet) return <td className="inv-td-star" />;
@@ -42,7 +54,8 @@ export default function QualifiedLeads() {
   const [filterFormState, setFilterFormState] = useState({});
   const [showFilters, setShowFilters] = useState(false);
   const canPost = ['admin', 'manager', 'rm'].includes(user?.role);
-  const cols = 8;
+  const isAdmin = user?.role === 'admin';
+  const cols = isAdmin ? 9 : 8;
   const filterCount = Object.keys(filtersApplied).length;
 
   const load = useCallback(async () => {
@@ -102,6 +115,7 @@ export default function QualifiedLeads() {
               <th className="inv-th inv-th-right">Asking</th>
               <th className="inv-th inv-th-right">OH Price</th>
               <th className="inv-th inv-th-right">Variation</th>
+              {isAdmin && <th className="inv-th">RM</th>}
             </tr>
           </thead>
           <tbody>
@@ -123,6 +137,7 @@ export default function QualifiedLeads() {
                     <td className="inv-td-num val-orange">{formatPrice(it.price)}</td>
                     <td className="inv-td-num"><OhPrice item={it} /></td>
                     <td className={`inv-td-num ${v ? `val-var-${v.sign}` : 'muted'}`}>{v ? v.label : '—'}</td>
+                    {isAdmin && <td className="inv-td-muted" title={assignedRmsTitle(it.assigned_rms)}><span className="inv-clip inv-clip-rm">{formatAssignedRms(it.assigned_rms)}</span></td>}
                   </tr>
                   {isOpen && (
                     <tr className="expand-row"><td colSpan={cols}>
