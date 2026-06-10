@@ -6,7 +6,7 @@ import json
 from flask import g, jsonify, request
 
 from ...db import get_conn
-from ...services.activity import log as log_activity
+from ...services.activity import log as log_activity, log_many
 from ..auth import require_auth
 from ._common import (
     BULK_ALLOWED_FIELDS,
@@ -174,20 +174,31 @@ def bulk_update():
                 )
                 updated_count = cur.rowcount
 
-                # One activity_log row per (entity, field changed).
+                # One activity_log row per (entity, field changed), written in a
+                # single batched INSERT — a per-row loop of INSERTs blows the
+                # request timeout on large selections.
+                log_rows = []
                 for oid in allowed_ids:
                     before = existing[oid]
                     for k, v in updates.items():
-                        if before.get(k) == v:
+                        # Same value re-submitted: skip everything except `stage`.
+                        # Re-applying the current stage in bulk is a deliberate
+                        # re-touch and logs a bulk_stage_change (counts as an
+                        # action) even though the column is unchanged.
+                        same = before.get(k) == v
+                        if same and k != "stage":
                             continue
-                        log_activity(
-                            cur,
-                            actor_user_id=user["id"], actor_email=user["email"],
-                            entity_type="inventory", entity_id=oid,
-                            action=("bulk_stage_change" if k == "stage" else "bulk_update"),
-                            field=k, before_value=before.get(k), after_value=v,
-                            metadata={"bulk_batch_size": len(allowed_ids)},
-                        )
+                        meta = {"bulk_batch_size": len(allowed_ids)}
+                        if same and k == "stage":
+                            meta["same_stage"] = True
+                        log_rows.append({
+                            "actor_user_id": user["id"], "actor_email": user["email"],
+                            "entity_type": "inventory", "entity_id": oid,
+                            "action": ("bulk_stage_change" if k == "stage" else "bulk_update"),
+                            "field": k, "before_value": before.get(k), "after_value": v,
+                            "metadata": meta,
+                        })
+                log_many(cur, log_rows)
 
         return jsonify({
             "requested": len(oh_ids),

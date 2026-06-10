@@ -10,7 +10,7 @@ const INITIAL = {
   price: '', seller_name: '', seller_phone: '', posting_date: '', listing_link: '',
 };
 
-export default function AddInventoryModal({ onClose, onAdded }) {
+export default function AddInventoryModal({ onClose, onAdded, defaultStage = 'lead' }) {
   const [f, setF] = useState(INITIAL);
   const [societies, setSocieties] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -45,7 +45,7 @@ export default function AddInventoryModal({ onClose, onAdded }) {
       setSubmitting(true);
       const payload = {
         ...f,
-        stage: 'lead',
+        stage: defaultStage,
         bedrooms: f.bedrooms === '' ? null : Number(f.bedrooms),
         area_sqft: f.area_sqft === '' ? null : Number(f.area_sqft),
         price: f.price === '' ? null : Math.round(Number(f.price) * 100000),
@@ -78,7 +78,7 @@ export default function AddInventoryModal({ onClose, onAdded }) {
           </div>
           <div><label>BHK</label>
             <select value={f.bedrooms} onChange={(e) => set('bedrooms', e.target.value)}>
-              <option value="">Select…</option><option value="2">2 BHK</option><option value="3">3 BHK</option><option value="4">4 BHK</option>
+              <option value="">Select…</option><option value="2">2 BHK</option><option value="2.5">2.5 BHK</option><option value="3">3 BHK</option><option value="3.5">3.5 BHK</option><option value="4">4 BHK</option>
             </select>
           </div>
           <div><label>Area (sqft)</label><input type="number" value={f.area_sqft} onChange={(e) => set('area_sqft', e.target.value)} /></div>

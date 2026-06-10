@@ -99,6 +99,12 @@ def create_one():
     if not fields.get("source"):
         fields["source"] = "Website"
 
+    # Stage the new row starts in. Defaults to the intake stage 'lead'; the
+    # Qualified Leads page creates directly into 'qualified'.
+    stage = body.get("stage") or "lead"
+    if stage not in VALID_STAGES:
+        return jsonify({"error": f"invalid stage: {stage}"}), 400
+
     if not (fields.get("listing_link") or "").strip():
         fields["listing_link"] = f"internal://manual/{_uuid.uuid4()}"
 
@@ -161,7 +167,7 @@ def create_one():
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s,
                           %s, %s, %s,
                           %s, %s, %s, %s, %s,
-                          'lead', %s, %s,
+                          %s, %s, %s,
                           (NOW() AT TIME ZONE 'Asia/Kolkata')::DATE, NULL)
                 RETURNING *
                 """,
@@ -171,7 +177,7 @@ def create_one():
                     fields.get("floor"), fields.get("tower"), fields.get("unit_no"),
                     fields.get("price"), fields.get("seller_name"),
                     fields.get("seller_phone"), fields.get("posting_date"), fields["listing_link"],
-                    [rm_id] if rm_id else [], mgr_id,
+                    stage, [rm_id] if rm_id else [], mgr_id,
                 ),
             )
             row = cur.fetchone()
@@ -300,15 +306,25 @@ def update_one(oh_id: str):
             for k, v in body.items():
                 if k not in allowed:
                     continue
-                # Re-follow-up: the lead stays in 'follow_up' but a NEW follow-up
-                # date is set. The stage column doesn't change (so no UPDATE for
-                # it), yet it's genuine work — emit a stage_change anyway so it
-                # surfaces in the user report (which only counts stage_change
-                # rows). The follow_up_at change is written/logged on its own
-                # iteration below.
-                if k == "stage" and v == "follow_up" and existing.get("stage") == "follow_up":
-                    new_fu = body.get("follow_up_at")
-                    if new_fu and str(existing.get("follow_up_at") or "")[:10] != str(new_fu)[:10]:
+                if existing.get(k) == v:
+                    # Same value re-submitted. For every field except `stage`
+                    # this is a true no-op, so we skip it. Re-selecting the
+                    # CURRENT stage is a deliberate re-touch, so we emit a
+                    # stage_change (which counts as an action) WITHOUT issuing an
+                    # UPDATE for the unchanged column. A follow_up→follow_up
+                    # re-touch with a moved date is additionally tagged
+                    # re_follow_up; the follow_up_at change itself is
+                    # written/logged on its own iteration below.
+                    if k == "stage":
+                        meta = {
+                            "actor_role": user["role"],
+                            "cross_assignment": cross_assignment_edit,
+                            "same_stage": True,
+                        }
+                        if v == "follow_up":
+                            new_fu = body.get("follow_up_at")
+                            if new_fu and str(existing.get("follow_up_at") or "")[:10] != str(new_fu)[:10]:
+                                meta["re_follow_up"] = True
                         log_activity(
                             cur,
                             actor_user_id=user["id"],
@@ -317,17 +333,13 @@ def update_one(oh_id: str):
                             entity_id=oh_id,
                             action="stage_change",
                             field="stage",
-                            before_value="follow_up",
-                            after_value="follow_up",
-                            metadata={
-                                "actor_role": user["role"],
-                                "cross_assignment": cross_assignment_edit,
-                                "re_follow_up": True,
-                            },
+                            before_value=v,
+                            after_value=v,
+                            metadata=meta,
                         )
                     continue
-                if existing.get(k) == v:
-                    continue
+                if k == "price" and user["role"] != "admin":
+                    return jsonify({"error": "only admin can change asking price"}), 403
                 if k == "priority" and user["role"] not in PRIORITY_ROLES:
                     return jsonify({"error": "only admin/manager can change priority"}), 403
                 if k == "priority":

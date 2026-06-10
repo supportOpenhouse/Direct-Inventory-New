@@ -182,6 +182,10 @@ BULK_ALLOWED_FIELDS = {
     "priority",
 }
 
+# Standard BHK options offered in the UI. The BHK filter's "Other" bucket matches
+# anything outside this set. Keep in sync with the FilterPanel BHK pills.
+STANDARD_BHKS = [1, 2, 2.5, 3, 3.5, 4, 5]
+
 # Roles allowed to flag a lead as Priority / set star_color.
 PRIORITY_ROLES = {"admin", "manager", "rm"}
 
@@ -289,6 +293,14 @@ def _build_filters(user: dict, args, alias: str = ""):
     elif rm_id.isdigit():
         base_filters.append(f"AND %s = ANY({p}assigned_rm_ids)")
         base_params.append(int(rm_id))
+
+    # Multi-RM filter — comma-separated ids → rows assigned to ANY of them.
+    rm_ids_raw = (args.get("rm_ids") or "").strip()
+    if rm_ids_raw:
+        rm_ids = [int(x) for x in rm_ids_raw.split(",") if x.strip().isdigit()]
+        if rm_ids:
+            base_filters.append(f"AND {p}assigned_rm_ids && %s")
+            base_params.append(rm_ids)
     if q:
         # Substring ("half") search: each whitespace-separated token must appear
         # case-insensitively, anywhere, in at least one searchable column — so a
@@ -321,13 +333,23 @@ def _build_filters(user: dict, args, alias: str = ""):
             base_filters.append(f"AND LOWER(TRIM({p}locality)) = ANY(%s)")
             base_params.append(names)
     if bhk_csv:
+        tokens = [x.strip() for x in bhk_csv.split(",") if x.strip()]
+        want_other = any(t.lower() == "other" for t in tokens)
         try:
-            bhks = [int(x) for x in bhk_csv.split(",") if x.strip()]
-            if bhks:
-                base_filters.append(f"AND {p}bedrooms = ANY(%s)")
-                base_params.append(bhks)
+            nums = [float(t) for t in tokens if t.lower() != "other"]
         except ValueError:
-            pass
+            nums = []
+        conds, cond_params = [], []
+        if nums:
+            conds.append(f"{p}bedrooms = ANY(%s)")
+            cond_params.append(nums)
+        if want_other:
+            # Anomalies: a BHK value present but outside the standard options.
+            conds.append(f"({p}bedrooms IS NOT NULL AND {p}bedrooms <> ALL(%s))")
+            cond_params.append(STANDARD_BHKS)
+        if conds:
+            base_filters.append("AND (" + " OR ".join(conds) + ")")
+            base_params.extend(cond_params)
     if price_min is not None:
         base_filters.append(f"AND {p}price >= %s")
         base_params.append(price_min)
@@ -356,6 +378,12 @@ def _build_filters(user: dict, args, alias: str = ""):
     if source:
         base_filters.append(f"AND {p}source = %s")
         base_params.append(source)
+
+    # No-phone / has-phone filters on seller_phone (mutually exclusive in the UI).
+    if str(args.get("no_phone") or "").strip().lower() in ("1", "true", "yes"):
+        base_filters.append(f"AND ({p}seller_phone IS NULL OR TRIM({p}seller_phone) = '')")
+    if str(args.get("has_phone") or "").strip().lower() in ("1", "true", "yes"):
+        base_filters.append(f"AND {p}seller_phone IS NOT NULL AND TRIM({p}seller_phone) <> ''")
 
     priority_raw = args.get("priority")
     if priority_raw not in (None, ""):
@@ -398,6 +426,15 @@ def _build_filters(user: dict, args, alias: str = ""):
         post_filters.append("AND oh_price IS NOT NULL AND oh_price > 0 "
                             "AND ((price::FLOAT - oh_price) / oh_price * 100) <= %s")
         post_params.append(variation_max)
+
+    # OH Price match filter — also references the LATERAL result.
+    #   missing -> "Check Price" rows (no strict oh_pricing match)
+    #   matched -> rows with a real oh_price.
+    oh_price_f = (args.get("oh_price") or "").strip().lower()
+    if oh_price_f == "missing":
+        post_filters.append("AND oh_price IS NULL")
+    elif oh_price_f == "matched":
+        post_filters.append("AND oh_price IS NOT NULL")
 
     return scope, scope_params, base_filters, base_params, post_filters, post_params
 

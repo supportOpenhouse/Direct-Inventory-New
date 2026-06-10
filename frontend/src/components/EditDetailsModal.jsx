@@ -25,6 +25,8 @@ export default function EditDetailsModal({ item, onUpdated, onClose }) {
     locality: item.locality || '',
     seller_name: item.seller_name || '',
     seller_phone: item.seller_phone || '',
+    // Stored in rupees; shown/edited in lakhs (matches Add Inventory). Admin-only.
+    price: item.price != null ? String(item.price / 100000) : '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -53,7 +55,7 @@ export default function EditDetailsModal({ item, onUpdated, onClose }) {
 
   // Keep the row's existing value selectable even if it falls outside the
   // standard option sets, so a save never silently drops it.
-  const bhkOpts = [...new Set([2, 3, 4, ...(item.bedrooms != null ? [Number(item.bedrooms)] : [])])].sort((a, b) => a - b);
+  const bhkOpts = [...new Set([2, 2.5, 3, 3.5, 4, ...(item.bedrooms != null ? [Number(item.bedrooms)] : [])])].sort((a, b) => a - b);
   const floorOpts = item.floor && !BASE_FLOORS.includes(item.floor) ? [item.floor, ...BASE_FLOORS] : BASE_FLOORS;
 
   async function save() {
@@ -68,6 +70,8 @@ export default function EditDetailsModal({ item, onUpdated, onClose }) {
       seller_name: f.seller_name.trim() || null,
       seller_phone: f.seller_phone.trim() || null,
     };
+    // Asking price is admin-only (backend enforces too). Lakhs → rupees.
+    if (isAdmin) next.price = f.price === '' ? null : Math.round(Number(f.price) * 100000);
     // Diff against the current row — only send fields that actually changed.
     const body = {};
     for (const [k, v] of Object.entries(next)) {
@@ -132,7 +136,7 @@ export default function EditDetailsModal({ item, onUpdated, onClose }) {
 
         {isAdmin && (
           <>
-            <h4 className="edit-sec-h">🧑‍💼 Assigned RM</h4>
+            <h4 className="edit-sec-h">🧑‍💼 Assigned RM &amp; Pricing</h4>
             <div className="form-grid">
               <div>
                 <label>Assigned RM <span className="muted">(currently: {currentRm?.name || currentRm?.email || rms.find((u) => u.id === currentRmId)?.name || (currentRmId != null ? `#${currentRmId}` : 'Unassigned')})</span></label>
@@ -141,6 +145,7 @@ export default function EditDetailsModal({ item, onUpdated, onClose }) {
                   {rmOptions.map((u) => <option key={u.id} value={String(u.id)}>{u.name || u.email}</option>)}
                 </select>
               </div>
+              <div><label>Asking Price (in lakhs)</label><input type="number" step="0.01" value={f.price} onChange={(e) => set('price', e.target.value)} placeholder="e.g. 150 = ₹1.5 Cr" /></div>
             </div>
           </>
         )}

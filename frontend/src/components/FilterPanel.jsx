@@ -31,7 +31,7 @@ const DATE_PRESETS = [
 const EMPTY = {
   society: [], locality: [], bhk: [], star: [], reason: [],
   price_min: '', price_max: '', variation_min: '', variation_max: '',
-  source: '', rm_id: '',
+  source: '', rm_id: '', rm_ids: [], oh_price: '', no_phone: false, has_phone: false,
   date_preset: '', posting_from: '', posting_to: '', posting_empty: false,
   fu_preset: '', follow_up_from: '', follow_up_to: '', follow_up_empty: false,
 };
@@ -45,6 +45,7 @@ export default function FilterPanel({ initial, defaultCity = '', role = '', show
     star: Array.isArray(initial?.star) ? initial.star : [],
     reason: Array.isArray(initial?.reason) ? initial.reason : [],
     rm_id: initial?.rm_id != null && initial?.rm_id !== '' ? String(initial.rm_id) : '',
+    rm_ids: Array.isArray(initial?.rm_ids) ? initial.rm_ids.map(String) : [],
   }));
   const [societies, setSocieties] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -118,7 +119,11 @@ export default function FilterPanel({ initial, defaultCity = '', role = '', show
     if (f.variation_min !== '') out.variation_min = Number(f.variation_min);
     if (f.variation_max !== '') out.variation_max = Number(f.variation_max);
     if (f.source) out.source = f.source;
+    if (f.oh_price) out.oh_price = f.oh_price;
+    if (f.no_phone) out.no_phone = 1;
+    if (f.has_phone) out.has_phone = 1;
     if (canFilterRm && f.rm_id) out.rm_id = (f.rm_id === 'none' || f.rm_id === 'multiple') ? f.rm_id : Number(f.rm_id);
+    if (canFilterRm && f.rm_ids?.length) out.rm_ids = f.rm_ids.join(',');
     if (f.posting_from) out.posting_from = f.posting_from;
     if (f.posting_to) out.posting_to = f.posting_to;
     if (f.posting_empty) out.posting_empty = 1;
@@ -151,14 +156,33 @@ export default function FilterPanel({ initial, defaultCity = '', role = '', show
           <div className="filter-block">
             <label>BHK</label>
             <div className="bhk-pills">
-              {[1, 2, 3, 4, 5].map((n) => (
+              {[1, 2, 2.5, 3, 3.5, 4, 5].map((n) => (
                 <button key={n} type="button" className={f.bhk.includes(n) ? 'pill pill-on' : 'pill'} onClick={() => toggleBhk(n)}>{n} BHK</button>
               ))}
+              <button type="button" className={f.bhk.includes('other') ? 'pill pill-on' : 'pill'} onClick={() => toggleBhk('other')} title="BHK values outside the standard options">Other</button>
             </div>
           </div>
           <div className="filter-block">
             <label>Source</label>
             <input type="text" value={f.source} onChange={(e) => set('source', e.target.value)} placeholder="e.g. 99acres, Website" />
+          </div>
+
+          <div className="filter-block">
+            <label>OH Price</label>
+            <div className="bhk-pills">
+              <button type="button" className={f.oh_price === 'missing' ? 'pill pill-on' : 'pill'} onClick={() => set('oh_price', f.oh_price === 'missing' ? '' : 'missing')}>Check Price (no match)</button>
+              <button type="button" className={f.oh_price === 'matched' ? 'pill pill-on' : 'pill'} onClick={() => set('oh_price', f.oh_price === 'matched' ? '' : 'matched')}>Has OH Price</button>
+            </div>
+          </div>
+
+          <div className="filter-block">
+            <label>Contact</label>
+            <div className="bhk-pills">
+              <button type="button" className={f.has_phone ? 'pill pill-on' : 'pill'}
+                onClick={() => setF((p) => ({ ...p, has_phone: !p.has_phone, no_phone: false }))}>Has Contact No.</button>
+              <button type="button" className={f.no_phone ? 'pill pill-on' : 'pill'}
+                onClick={() => setF((p) => ({ ...p, no_phone: !p.no_phone, has_phone: false }))}>No phone no.</button>
+            </div>
           </div>
 
           <div className="filter-block">
@@ -174,12 +198,17 @@ export default function FilterPanel({ initial, defaultCity = '', role = '', show
           {canFilterRm && (
             <div className="filter-block">
               <label>RM</label>
-              <select value={f.rm_id} onChange={(e) => set('rm_id', e.target.value)}>
-                <option value="">— All RMs —</option>
-                <option value="none">No RM assigned</option>
-                <option value="multiple">Multiple RMs</option>
-                {rms.map((u) => <option key={u.id} value={String(u.id)}>{u.name || u.email}</option>)}
-              </select>
+              <SearchableMultiSelect
+                options={rms.map((u) => ({ value: String(u.id), label: u.name || u.email }))}
+                value={f.rm_ids}
+                onChange={(v) => setF((p) => ({ ...p, rm_ids: v, rm_id: v.length ? '' : p.rm_id }))}
+                placeholder="Pick RMs…" />
+              <div className="bhk-pills" style={{ marginTop: 6 }}>
+                <button type="button" className={f.rm_id === 'none' ? 'pill pill-on' : 'pill'}
+                  onClick={() => setF((p) => ({ ...p, rm_id: p.rm_id === 'none' ? '' : 'none', rm_ids: [] }))}>No RM assigned</button>
+                <button type="button" className={f.rm_id === 'multiple' ? 'pill pill-on' : 'pill'}
+                  onClick={() => setF((p) => ({ ...p, rm_id: p.rm_id === 'multiple' ? '' : 'multiple', rm_ids: [] }))}>Multiple RMs</button>
+              </div>
             </div>
           )}
 

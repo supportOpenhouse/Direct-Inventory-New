@@ -25,6 +25,21 @@ function fmtDateTime(iso) {
   return d.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
 }
 
+// Turn a backend error payload into a user-facing message. When the Forms app
+// rejects the request the useful reason is nested in forms_response (an object
+// like { error: "contact_no must be 10 digits…" } or, for a non-JSON reply, a
+// raw string) — surface that instead of the generic top-level "error".
+function errorMessage(data, fallback) {
+  if (!data) return fallback;
+  const top = data.error;
+  if (top === 'forms app rejected request' || top === 'forms app returned non-JSON') {
+    const fr = data.forms_response;
+    const detail = fr && typeof fr === 'object' ? fr.error : (typeof fr === 'string' ? fr.trim() : null);
+    if (detail) return `Forms app rejected the request: ${detail}`;
+  }
+  return top || fallback;
+}
+
 /**
  * Visit-schedule flow (ported). Date + time + field exec (+ assigned-by for
  * admin). Before sending, checks for existing OpenHouse units in the society
@@ -36,6 +51,8 @@ export default function VisitScheduleModal({ item, onClose, onScheduled }) {
 
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
+  // Per-visit asking price (lakhs), pre-filled from the lead; sent as demand_price.
+  const [demandPrice, setDemandPrice] = useState(item.price != null ? String(item.price / 100000) : '');
   const [execs, setExecs] = useState([]);
   const [execPhone, setExecPhone] = useState('');
   const [loadingExecs, setLoadingExecs] = useState(true);
@@ -54,9 +71,12 @@ export default function VisitScheduleModal({ item, onClose, onScheduled }) {
     if (!execPhone) miss.push('Field Exec');
     if (isAdmin && !assignedBy) miss.push('Assigned By');
     for (const [k, label] of REQUIRED_INV_FIELDS) {
+      // Price is editable in this modal (demand_price), so validate the input.
+      if (k === 'price') continue;
       const v = item?.[k];
       if (v === null || v === undefined || String(v).trim() === '') miss.push(label);
     }
+    if (demandPrice === '' || demandPrice == null) miss.push('Asking Price');
     return miss;
   }
 
@@ -81,12 +101,13 @@ export default function VisitScheduleModal({ item, onClose, onScheduled }) {
       setSubmitting(true);
       const r = await api.post('/api/visits/schedule', {
         oh_id: item.oh_id, schedule_date: date, schedule_time: time, field_exec_phone: execPhone,
+        demand_price: demandPrice === '' ? null : Number(demandPrice),
         ...(isAdmin ? { assigned_by_email: assignedBy } : {}),
       });
       onScheduled(r);
     } catch (e) {
       if (e.status === 409 && e.data?.existing_visit) { setExisting(e.data.existing_visit); return; }
-      setError(e.data?.error || e.message || 'Could not schedule the visit');
+      setError(errorMessage(e.data, e.message || 'Could not schedule the visit'));
     } finally { setSubmitting(false); }
   }
 
@@ -154,6 +175,8 @@ export default function VisitScheduleModal({ item, onClose, onScheduled }) {
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         <label style={{ marginTop: 10 }}>Time <span className="req">*</span></label>
         <input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+        <label style={{ marginTop: 10 }}>Asking Price (in lakhs) <span className="req">*</span></label>
+        <input type="number" step="0.01" value={demandPrice} onChange={(e) => setDemandPrice(e.target.value)} placeholder="e.g. 150 = ₹1.5 Cr" />
         <label style={{ marginTop: 10 }}>Field Exec <span className="req">*</span></label>
         <select value={execPhone} onChange={(e) => setExecPhone(e.target.value)} disabled={loadingExecs}>
           <option value="">{loadingExecs ? 'Loading…' : 'Select…'}</option>
