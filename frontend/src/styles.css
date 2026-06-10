@@ -989,3 +989,19 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2);
   .topbar-menu { display: grid; }
   .form-grid, .filter-grid { grid-template-columns: 1fr; }
 }
+
+/* Environment marker — flags this as the non-production testing server. */
+.env-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 10px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+  background: #f97316;
+  border-radius: 999px;
+  white-space: nowrap;
+}

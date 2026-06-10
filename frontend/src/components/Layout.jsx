@@ -113,6 +113,7 @@ export default function Layout() {
         <header className="topbar">
           <button className="icon-btn topbar-menu" onClick={() => setMobileOpen(true)} aria-label="Menu"><IconMenu /></button>
           <h1>{title}</h1>
+          <span className="env-badge">Testing Server</span>
           <div className="topbar-spacer" />
           {(seg === '' || seg === 'leads') && <CpScanButton />}
           {seg === 'qualified-leads' && <AddInventoryButton defaultStage="qualified" />}
