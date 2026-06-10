@@ -495,8 +495,13 @@ export function mockApi(method, path, body) {
   if (p === '/api/tickets' && method === 'GET') {
     const me = mockUser();
     let items = DB.tickets.slice();
-    if (me.role === 'manager') items = items.filter((t) => t.created_by_id === me.id);
-    else if (me.role === 'rm') items = items.filter((t) => t.assigned_rm_id === me.id);
+    if (me.role === 'manager') {
+      // Tickets they raised OR on a property whose RM reports to them.
+      items = items.filter((t) => t.created_by_id === me.id
+        || (DB.users.find((u) => u.id === t.assigned_rm_id)?.manager === me.id));
+    } else if (me.role === 'rm') {
+      items = items.filter((t) => t.assigned_rm_id === me.id);
+    }
     const ohId = params.get('oh_id');
     if (ohId) items = items.filter((t) => t.oh_id === ohId);
     const status = params.get('status');

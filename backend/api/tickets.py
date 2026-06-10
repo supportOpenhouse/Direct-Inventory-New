@@ -51,7 +51,13 @@ def _visibility(user: dict) -> tuple[str, list]:
     if role == "admin":
         return ("TRUE", [])
     if role == "manager":
-        return ("t.created_by_id = %s", [user["id"]])
+        # A manager sees tickets they raised AND any ticket on a property whose
+        # assigned RM reports to them — even ones an admin raised.
+        return (
+            "(t.created_by_id = %s OR EXISTS ("
+            "  SELECT 1 FROM users u WHERE u.id = t.assigned_rm_id AND u.manager = %s))",
+            [user["id"], user["id"]],
+        )
     return ("t.assigned_rm_id = %s", [user["id"]])  # rm
 
 
