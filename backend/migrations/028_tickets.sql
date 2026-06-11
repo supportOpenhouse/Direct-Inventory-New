@@ -10,9 +10,11 @@
 --   created -> 'rm'; RM replies -> 'creator'; creator replies -> 'rm'; closed -> NULL.
 -- Idempotent: safe to re-run.
 
+-- oh_id is nullable: a ticket can be raised on a property (oh_id set, RM
+-- resolved from the property) OR directly to an RM with no property link.
 CREATE TABLE IF NOT EXISTS tickets (
   id               BIGSERIAL PRIMARY KEY,
-  oh_id            TEXT NOT NULL,
+  oh_id            TEXT,
   title            TEXT NOT NULL,
   summary          TEXT,
   status           TEXT NOT NULL DEFAULT 'open',      -- 'open' | 'closed'

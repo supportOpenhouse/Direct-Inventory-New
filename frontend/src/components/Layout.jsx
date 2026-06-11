@@ -7,6 +7,7 @@ import NotificationBell from './NotificationBell.jsx';
 import CpScanButton from './CpScanButton.jsx';
 import ReassignLeadsButton from './ReassignLeadsButton.jsx';
 import AddInventoryButton from './AddInventoryButton.jsx';
+import CreateTicketButton from './CreateTicketButton.jsx';
 import {
   IconHome, IconLeads, IconQualified, IconFollowUp, IconVisit, IconPipeline, IconRejected,
   IconReport, IconUsers, IconLogs, IconTasks, IconTicket, IconSun, IconMoon, IconMenu, IconLogout, IconChevron,
@@ -140,6 +141,7 @@ export default function Layout() {
           <div className="topbar-spacer" />
           {(seg === '' || seg === 'leads') && <CpScanButton />}
           {seg === 'qualified-leads' && <AddInventoryButton defaultStage="qualified" />}
+          {seg === 'tickets' && (isAdmin || isManager) && <CreateTicketButton />}
           {seg === 'users' && isAdmin && <ReassignLeadsButton />}
           <NotificationBell role={user?.role} />
           <button className="icon-btn" onClick={toggle} aria-label="Toggle theme" title={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}>

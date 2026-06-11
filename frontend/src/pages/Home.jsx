@@ -81,7 +81,7 @@ function TaskCard({ color, Icon, title, total, worked, loading, locked = false, 
 // Third Today's-Task slot: unresolved tickets needing this user's action. Not a
 // progress card — a big count that links to the Tickets page.
 function TicketTaskCard({ count, loading }) {
-  const n = loading ? '—' : (count ?? 0);
+  const noTickets = !loading && !count;
   return (
     <Link to="/tickets" className="task-card task-card-link" style={{ '--tc': '#0ea5e9' }}>
       <div className="tc-content">
@@ -89,11 +89,17 @@ function TicketTaskCard({ count, loading }) {
           <span className="tc-ic" style={{ color: '#0ea5e9' }}><IconTicket size={18} /></span>
           <h4>UNRESOLVED TICKETS</h4>
         </div>
-        <div className="tc-frac">
-          <span className="tc-worked">{n}</span>
-          <span className="tc-frac-lbl">need your action</span>
-        </div>
-        <div className="tc-sub">{loading ? '—' : (count ? 'Tap to open the Tickets page' : 'All caught up 🎉')}</div>
+        {noTickets ? (
+          <div className="tc-notask">No tickets</div>
+        ) : (
+          <>
+            <div className="tc-frac">
+              <span className="tc-worked">{loading ? '—' : count}</span>
+              <span className="tc-frac-lbl">need your action</span>
+            </div>
+            <div className="tc-sub">{loading ? '—' : 'Tap to open the Tickets page'}</div>
+          </>
+        )}
       </div>
     </Link>
   );

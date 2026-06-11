@@ -157,32 +157,50 @@ def get_ticket(ticket_id: int):
 @bp.post("")
 @require_auth("admin", "manager")
 def create_ticket():
+    """Raise a ticket either ON a property (oh_id → RM resolved from the
+    property) or DIRECTLY to an RM (rm_id, no property link). Managers can only
+    target RMs on their own team in either mode."""
     body = request.get_json(silent=True) or {}
     oh_id = (body.get("oh_id") or "").strip()
     title = (body.get("title") or "").strip()
     summary = (body.get("summary") or "").strip()
-    if not oh_id or not title:
-        return jsonify({"error": "oh_id and title are required"}), 400
+    rm_id = body.get("rm_id") or body.get("assigned_rm_id")
+    if not title:
+        return jsonify({"error": "title is required"}), 400
+    if not oh_id and not rm_id:
+        return jsonify({"error": "a property (oh_id) or an RM (rm_id) is required"}), 400
 
     user = g.user
     conn = get_conn()
     try:
         with conn, conn.cursor() as cur:
-            cur.execute("SELECT oh_id, city, assigned_rm_ids FROM inventory WHERE oh_id = %s", (oh_id,))
-            prop = cur.fetchone()
-            if not prop:
-                return jsonify({"error": "property not found"}), 404
-            rm_ids = prop.get("assigned_rm_ids") or []
-            if not rm_ids:
-                return jsonify({"error": "property has no assigned RM to raise a ticket for"}), 400
-            assigned_rm_id = rm_ids[0]
+            city = None
+            if oh_id:
+                # Property mode — resolve the RM from the property.
+                cur.execute("SELECT oh_id, city, assigned_rm_ids FROM inventory WHERE oh_id = %s", (oh_id,))
+                prop = cur.fetchone()
+                if not prop:
+                    return jsonify({"error": "property not found"}), 404
+                rm_ids = prop.get("assigned_rm_ids") or []
+                if not rm_ids:
+                    return jsonify({"error": "property has no assigned RM to raise a ticket for"}), 400
+                assigned_rm_id = rm_ids[0]
+                city = prop.get("city")
+            else:
+                # Direct mode — ticket goes straight to a chosen RM, no property.
+                assigned_rm_id = int(rm_id)
+                cur.execute("SELECT id, role FROM users WHERE id = %s", (assigned_rm_id,))
+                rm = cur.fetchone()
+                if not rm or rm["role"] != "rm":
+                    return jsonify({"error": "invalid RM"}), 400
+                oh_id = None
 
-            # Manager may only raise tickets on properties whose RM reports to them.
+            # Manager may only raise tickets for RMs who report to them.
             if user["role"] == "manager":
                 cur.execute("SELECT manager FROM users WHERE id = %s", (assigned_rm_id,))
                 rm = cur.fetchone()
                 if not rm or rm["manager"] != user["id"]:
-                    return jsonify({"error": "this property's RM is not in your team"}), 403
+                    return jsonify({"error": "that RM is not in your team"}), 403
 
             cur.execute(
                 """
@@ -194,16 +212,18 @@ def create_ticket():
                 RETURNING id
                 """,
                 (oh_id, title, summary or None, user["id"], user.get("name"),
-                 user["email"], assigned_rm_id, prop.get("city")),
+                 user["email"], assigned_rm_id, city),
             )
             ticket_id = cur.fetchone()["id"]
-            log_activity(
-                cur,
-                actor_user_id=user["id"], actor_email=user["email"],
-                entity_type="inventory", entity_id=oh_id, action="ticket_created",
-                field="ticket", after_value=title,
-                metadata={"ticket_id": ticket_id, "assigned_rm_id": assigned_rm_id},
-            )
+            # Only property tickets get an inventory activity-log entry.
+            if oh_id:
+                log_activity(
+                    cur,
+                    actor_user_id=user["id"], actor_email=user["email"],
+                    entity_type="inventory", entity_id=oh_id, action="ticket_created",
+                    field="ticket", after_value=title,
+                    metadata={"ticket_id": ticket_id, "assigned_rm_id": assigned_rm_id},
+                )
             return jsonify(_fetch_one(cur, ticket_id)), 201
     finally:
         conn.close()

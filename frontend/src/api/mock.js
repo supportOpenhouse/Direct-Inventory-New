@@ -515,15 +515,26 @@ export function mockApi(method, path, body) {
   }
   if (p === '/api/tickets' && method === 'POST') {
     const me = mockUser();
-    const it = findItem(body?.oh_id);
-    if (!it) throw { status: 404, data: { error: 'property not found' } };
-    const rmIds = it.assigned_rm_ids || [];
-    if (!rmIds.length) throw { status: 400, data: { error: 'property has no assigned RM to raise a ticket for' } };
+    if (!body?.title) throw { status: 400, data: { error: 'title is required' } };
+    let ohId = null; let city = null; let assignedRmId;
+    if (body.oh_id) {
+      const it = findItem(body.oh_id);
+      if (!it) throw { status: 404, data: { error: 'property not found' } };
+      const rmIds = it.assigned_rm_ids || [];
+      if (!rmIds.length) throw { status: 400, data: { error: 'property has no assigned RM to raise a ticket for' } };
+      ohId = it.oh_id; city = it.city; assignedRmId = rmIds[0];
+    } else if (body.rm_id || body.assigned_rm_id) {
+      assignedRmId = Number(body.rm_id || body.assigned_rm_id);
+      const rm = DB.users.find((u) => u.id === assignedRmId);
+      if (!rm || rm.role !== 'rm') throw { status: 400, data: { error: 'invalid RM' } };
+    } else {
+      throw { status: 400, data: { error: 'a property (oh_id) or an RM (rm_id) is required' } };
+    }
     const t = {
-      id: nextId(), oh_id: it.oh_id, title: body.title, summary: body.summary || null,
+      id: nextId(), oh_id: ohId, title: body.title, summary: body.summary || null,
       status: 'open', awaiting: 'rm',
       created_by_id: me.id, created_by_name: me.name, created_by_email: me.email,
-      assigned_rm_id: rmIds[0], city: it.city, messages: [],
+      assigned_rm_id: assignedRmId, city, messages: [],
       last_activity_at: new Date().toISOString(), created_at: new Date().toISOString(),
       closed_at: null, closed_by_id: null,
     };

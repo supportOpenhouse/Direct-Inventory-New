@@ -100,7 +100,7 @@ export default function TicketModal({ ticket, onChanged, onClose }) {
           <button className="modal-close" onClick={onClose}><IconClose /></button>
         </div>
         <p className="modal-sub">
-          {t.society || '—'} · {t.oh_id}
+          {t.oh_id ? <>{t.society || '—'} · {t.oh_id}</> : <>Direct ticket</>}
           {t.assigned_rm_name && <> · RM: {t.assigned_rm_name}</>}
         </p>
 

@@ -39,6 +39,14 @@ export default function Tickets() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Refetch when a ticket is created/replied/closed anywhere (e.g. the topbar
+  // New Ticket button).
+  useEffect(() => {
+    const onChanged = () => load();
+    window.addEventListener('tickets:changed', onChanged);
+    return () => window.removeEventListener('tickets:changed', onChanged);
+  }, [load]);
+
   function onChanged(updated) {
     setItems((prev) => prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)));
   }
@@ -70,7 +78,7 @@ export default function Tickets() {
                 <span className="tk-card-title">{t.title}</span>
                 <span className={`tk-badge ${ticketStatusClass(t)}`}>{ticketStatusLabel(t)}</span>
               </div>
-              <div className="tk-card-prop">{t.society || '—'} · {t.oh_id}{t.assigned_rm_name ? ` · RM: ${t.assigned_rm_name}` : ''}</div>
+              <div className="tk-card-prop">{t.oh_id ? `${t.society || '—'} · ${t.oh_id}` : 'Direct ticket'}{t.assigned_rm_name ? ` · RM: ${t.assigned_rm_name}` : ''}</div>
               {t.summary && <div className="tk-card-summary">{t.summary}</div>}
               <div className="tk-card-foot">
                 <span>{(t.messages || []).length} repl{(t.messages || []).length === 1 ? 'y' : 'ies'}</span>
